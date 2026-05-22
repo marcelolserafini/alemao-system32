@@ -726,6 +726,27 @@ function clearFilters() {
 }
 
 // Modal Helpers
+function openImageViewer(url, title = "Visualizar Imagem") {
+    const modal = document.getElementById("modal-image-viewer");
+    const img = document.getElementById("modal-image-content");
+    const titleEl = document.getElementById("modal-image-title");
+    if (modal && img) {
+        img.src = url;
+        if (titleEl) titleEl.textContent = title;
+        modal.classList.remove("hidden");
+        lucide.createIcons();
+    }
+}
+
+function closeImageViewer() {
+    const modal = document.getElementById("modal-image-viewer");
+    const img = document.getElementById("modal-image-content");
+    if (modal) {
+        modal.classList.add("hidden");
+        if (img) img.src = "";
+    }
+}
+
 function openSettingsModal() {
     const modal = document.getElementById("modal-settings");
     if (modal) modal.classList.remove("hidden");
@@ -3161,8 +3182,11 @@ function renderInventoryAssets() {
             <div>
                 <!-- Image Header -->
                 ${a.url_foto ? `
-                <div class="w-full h-32 rounded-lg overflow-hidden border border-white/5 mb-3.5 bg-slate-900 flex items-center justify-center relative">
-                    <img src="${a.url_foto}" alt="Equipamento" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                <div onclick="openImageViewer('${a.url_foto}', '${a.marca_modelo} - ${a.codigo_patrimonio_ou_tag}')" class="w-full h-32 rounded-lg overflow-hidden border border-white/5 mb-3.5 bg-slate-900 flex items-center justify-center relative cursor-pointer group/image" title="Clique para ampliar">
+                    <img src="${a.url_foto}" alt="Equipamento" class="w-full h-full object-contain p-1.5 group-hover:scale-105 transition-transform duration-300">
+                    <div class="absolute inset-0 bg-slate-950/40 opacity-0 group-hover/image:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <i data-lucide="zoom-in" class="h-6 w-6 text-white drop-shadow"></i>
+                    </div>
                 </div>
                 ` : ''}
 
