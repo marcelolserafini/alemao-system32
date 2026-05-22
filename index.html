@@ -590,6 +590,17 @@
                     <i data-lucide="moon" class="h-5 w-5" id="theme-moon-icon"></i>
                 </button>
 
+                <!-- PWA Installation Controls (Dynamic) -->
+                <button id="btn-install-pwa" onclick="installPWA()" class="hidden flex items-center space-x-1.5 text-xs font-bold px-3 py-2.5 rounded-xl transition duration-300 bg-gradient-to-r from-accent-cyan to-accent-teal hover:opacity-95 text-white shadow-lg shadow-accent-cyan/20 animate-pulse" title="Instalar como Aplicativo (PWA)">
+                    <i data-lucide="download" class="h-4 w-4"></i>
+                    <span>Instalar App</span>
+                </button>
+
+                <div id="pwa-standalone-badge" class="hidden flex items-center space-x-1.5 text-xs font-bold px-3 py-2.5 rounded-xl border border-accent-cyan/20 bg-accent-cyan/10 text-accent-cyan" title="Executando no Modo Aplicativo Dedicado">
+                    <i data-lucide="layout" class="h-4 w-4"></i>
+                    <span>Modo App</span>
+                </div>
+
                 <!-- Connection Status -->
                 <button onclick="openSettingsModal()" id="btn-status" class="hidden flex items-center space-x-2 text-xs font-semibold px-3 py-2.5 rounded-xl transition duration-300 glass hover:bg-slate-900 border border-amber-500/20 text-amber-400">
                     <span class="h-2.5 w-2.5 rounded-full bg-amber-500 animate-ping"></span>
@@ -719,7 +730,12 @@
                             <span class="h-2.5 w-2.5 rounded-full bg-slate-400"></span>
                             <h3 class="font-outfit font-bold text-slate-200">Banco de Ideias</h3>
                         </div>
-                        <span id="count-ideias" class="text-xs bg-slate-800/80 px-2.5 py-1 rounded-full font-bold text-slate-300">0</span>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="toggleColumnView('Banco de Ideias')" class="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-all duration-200" title="Alternar Visualização">
+                                <i data-lucide="list" class="h-3.5 w-3.5" id="btn-col-toggle-Banco-de-Ideias"></i>
+                            </button>
+                            <span id="count-ideias" class="text-xs bg-slate-800/80 px-2.5 py-1 rounded-full font-bold text-slate-300">0</span>
+                        </div>
                     </div>
                     <div id="col-ideias" class="flex flex-col gap-4 flex-grow" ondragover="allowDrop(event)" ondrop="drop(event, 'Banco de Ideias')">
                         <!-- Cards injected via JS -->
@@ -733,7 +749,12 @@
                             <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
                             <h3 class="font-outfit font-bold text-slate-200">Backlog</h3>
                         </div>
-                        <span id="count-backlog" class="text-xs bg-amber-950/40 px-2.5 py-1 rounded-full font-bold text-amber-400 border border-amber-500/10">0</span>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="toggleColumnView('Backlog de Implementação')" class="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-all duration-200" title="Alternar Visualização">
+                                <i data-lucide="list" class="h-3.5 w-3.5" id="btn-col-toggle-Backlog-de-Implementação"></i>
+                            </button>
+                            <span id="count-backlog" class="text-xs bg-amber-950/40 px-2.5 py-1 rounded-full font-bold text-amber-400 border border-amber-500/10">0</span>
+                        </div>
                     </div>
                     <div id="col-backlog" class="flex flex-col gap-4 flex-grow" ondragover="allowDrop(event)" ondrop="drop(event, 'Backlog de Implementação')">
                         <!-- Cards injected via JS -->
@@ -747,7 +768,12 @@
                             <span class="h-2.5 w-2.5 rounded-full bg-accent-cyan"></span>
                             <h3 class="font-outfit font-bold text-slate-200">Em Andamento</h3>
                         </div>
-                        <span id="count-andamento" class="text-xs bg-cyan-950/40 px-2.5 py-1 rounded-full font-bold text-accent-cyan border border-accent-cyan/10">0</span>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="toggleColumnView('Em Andamento')" class="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-all duration-200" title="Alternar Visualização">
+                                <i data-lucide="list" class="h-3.5 w-3.5" id="btn-col-toggle-Em-Andamento"></i>
+                            </button>
+                            <span id="count-andamento" class="text-xs bg-cyan-950/40 px-2.5 py-1 rounded-full font-bold text-accent-cyan border border-accent-cyan/10">0</span>
+                        </div>
                     </div>
                     <div id="col-andamento" class="flex flex-col gap-4 flex-grow" ondragover="allowDrop(event)" ondrop="drop(event, 'Em Andamento')">
                         <!-- Cards injected via JS -->
@@ -761,18 +787,18 @@
                             <span class="h-2.5 w-2.5 rounded-full bg-accent-emerald"></span>
                             <h3 class="font-outfit font-bold text-slate-200">Concluídos</h3>
                         </div>
-                        <span id="count-concluido" class="text-xs bg-emerald-950/40 px-2.5 py-1 rounded-full font-bold text-accent-emerald border border-accent-emerald/10">0</span>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="toggleColumnView('Concluído')" class="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-all duration-200" title="Alternar Visualização">
+                                <i data-lucide="list" class="h-3.5 w-3.5" id="btn-col-toggle-Concluído"></i>
+                            </button>
+                            <span id="count-concluido" class="text-xs bg-emerald-950/40 px-2.5 py-1 rounded-full font-bold text-accent-emerald border border-accent-emerald/10">0</span>
+                        </div>
                     </div>
                     <div id="col-concluido" class="flex flex-col gap-4 flex-grow" ondragover="allowDrop(event)" ondrop="drop(event, 'Concluído')">
                         <!-- Cards injected via JS -->
                     </div>
                 </div>
 
-            </div>
-
-            <!-- List View (accordion mode) -->
-            <div id="board-list-view" class="hidden space-y-2">
-                <!-- Injected via JS renderBoardList() -->
             </div>
 
         </section>

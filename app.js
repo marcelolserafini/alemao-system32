@@ -439,6 +439,20 @@ function renderBoard() {
     Object.keys(cols).forEach(status => {
         const col = cols[status];
         if (col.countEl) col.countEl.textContent = col.items.length;
+        
+        // Sincroniza ícone do botão da coluna com base no modo ativo ('list' ou 'kanban')
+        const activeMode = boardColViews[status] || (status === 'Banco de Ideias' ? 'list' : 'kanban');
+        const toggleBtnIcon = document.getElementById(`btn-col-toggle-${status.replace(/\s+/g, '-')}`);
+        if (toggleBtnIcon) {
+            if (activeMode === 'list') {
+                toggleBtnIcon.setAttribute("data-lucide", "trello");
+                toggleBtnIcon.parentElement.setAttribute("title", "Mudar para Modo Cards");
+            } else {
+                toggleBtnIcon.setAttribute("data-lucide", "list");
+                toggleBtnIcon.parentElement.setAttribute("title", "Mudar para Modo Lista");
+            }
+        }
+
         if (col.el) {
             col.el.innerHTML = "";
 
@@ -451,14 +465,120 @@ function renderBoard() {
                 `;
             } else {
                 col.items.forEach(proj => {
-                    const card = createCardDOM(proj);
-                    col.el.appendChild(card);
+                    if (activeMode === 'list') {
+                        const card = createCompactCardDOM(proj);
+                        col.el.appendChild(card);
+                    } else {
+                        const card = createCardDOM(proj);
+                        col.el.appendChild(card);
+                    }
                 });
             }
         }
     });
 
     lucide.createIcons();
+}
+
+// Generate Compact List Card DOM
+function createCompactCardDOM(proj) {
+    const branch = branches.find(b => b.id === proj.id_filial);
+    const branchName = branch ? branch.nome : "Sem filial";
+    
+    let urgencyColor = "text-slate-400";
+    if (proj.urgencia === "Média") urgencyColor = "text-sky-400";
+    else if (proj.urgencia === "Alta") urgencyColor = "text-amber-400";
+    else if (proj.urgencia === "Crítica") urgencyColor = "text-rose-400";
+
+    const isStagnant = proj.status === "Em Andamento" && !proj.status_bloqueado && (Date.now() - new Date(proj.updated_at).getTime() > 24 * 60 * 60 * 1000);
+    const isBlocked = proj.status_bloqueado === true;
+
+    let borderStyle = "border-white/5";
+    if (isBlocked) borderStyle = "border-rose-500/50 shadow-md shadow-rose-950/10";
+    else if (isStagnant) borderStyle = "pulse-critical border-rose-500/80";
+
+    const container = document.createElement("div");
+    container.className = `glass rounded-xl overflow-hidden transition-all duration-300 border select-none ${borderStyle}`;
+    
+    // Suporte ao Drag & Drop no modo compacto
+    container.setAttribute("draggable", "true");
+    container.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", proj.id);
+        container.style.opacity = "0.4";
+    });
+    container.addEventListener("dragend", () => {
+        container.style.opacity = "1";
+    });
+
+    const descPreview = (proj.descricao || '').slice(0, 80);
+    const isTruncated = proj.descricao && proj.descricao.length > 80;
+
+    container.innerHTML = `
+        <!-- Accordion Header -->
+        <div onclick="toggleAccordion('${proj.id}')" class="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-white/5 transition select-none">
+            <i data-lucide="chevron-right" class="h-3.5 w-3.5 text-slate-500 transition-transform duration-200 flex-shrink-0" id="acc-icon-${proj.id}"></i>
+            <span class="flex-grow font-semibold text-slate-200 text-xs truncate" title="${escapeHtml(proj.titulo)}">${escapeHtml(proj.titulo)}</span>
+            <div class="flex items-center gap-1 flex-shrink-0">
+                ${isBlocked ? `<span class="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"></span>` : ""}
+                ${isStagnant ? `<span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>` : ""}
+                <span class="text-[9px] font-bold ${urgencyColor} bg-slate-900/60 px-1.5 py-0.5 rounded border border-current/20">${proj.urgencia}</span>
+            </div>
+        </div>
+        <!-- Accordion Body -->
+        <div id="accordion-${proj.id}" class="hidden px-3 pb-3 space-y-2 border-t border-white/5 bg-slate-950/20">
+            <p class="text-[11px] text-slate-400 whitespace-pre-wrap leading-relaxed pt-2">${escapeHtml(descPreview)}${isTruncated ? '...' : ''}</p>
+            
+            <div class="flex items-center justify-between text-[9px] text-slate-500 font-semibold pt-1">
+                <span class="text-accent-cyan truncate max-w-[120px]">${escapeHtml(branchName)}</span>
+                ${proj.id_usuario_designado ? (() => {
+                    const designatedUser = profiles.find(p => p.id === proj.id_usuario_designado);
+                    return designatedUser ? `<span class="text-slate-400 truncate max-w-[80px]">👤 ${escapeHtml(designatedUser.nome)}</span>` : "";
+                })() : ""}
+            </div>
+            
+            <div class="flex items-center justify-between pt-2 border-t border-white/5">
+                <button onclick="openDetails('${proj.id}')" class="flex items-center gap-1 text-[10px] font-bold text-accent-cyan hover:text-accent-teal transition">
+                    <i data-lucide="external-link" class="h-3 w-3"></i> Abrir Fluxo
+                </button>
+                ${isBlocked ? `
+                    <span class="text-[8px] font-extrabold text-rose-400 tracking-wider uppercase">Impedido</span>
+                ` : ""}
+            </div>
+        </div>
+    `;
+    
+    return container;
+}
+
+// Toggle individual column visual mode
+function toggleColumnView(statusName) {
+    if (!boardColViews) {
+        boardColViews = {
+            "Banco de Ideias": "list",
+            "Backlog de Implementação": "kanban",
+            "Em Andamento": "kanban",
+            "Concluído": "kanban"
+        };
+    }
+    boardColViews[statusName] = boardColViews[statusName] === 'kanban' ? 'list' : 'kanban';
+    localStorage.setItem("boardColViews", JSON.stringify(boardColViews));
+    
+    // Se mudou uma coluna, checamos se o estado do Master Switch mudou
+    const anyKanban = Object.values(boardColViews).some(v => v === 'kanban');
+    boardView = anyKanban ? 'kanban' : 'list';
+    localStorage.setItem('boardView', boardView);
+    
+    const icon = document.getElementById("toggle-view-icon");
+    const text = document.getElementById("toggle-view-text");
+    if (!anyKanban) {
+        if (icon) icon.setAttribute("data-lucide", "layout-dashboard");
+        if (text) text.textContent = "Modo Cards (Todos)";
+    } else {
+        if (icon) icon.setAttribute("data-lucide", "list");
+        if (text) text.textContent = "Modo Lista (Todos)";
+    }
+
+    renderBoard();
 }
 
 // Generate Card DOM
@@ -3791,6 +3911,30 @@ let notifPanelOpen = false;
 // Board view state (persisted in localStorage)
 let boardView = localStorage.getItem('boardView') || 'kanban';
 
+// Board column view states (mix-and-match cards/list modes persisted in localStorage)
+let boardColViews = {
+    "Banco de Ideias": "list",
+    "Backlog de Implementação": "kanban",
+    "Em Andamento": "kanban",
+    "Concluído": "kanban"
+};
+
+// Check if we need to migrate/force default the first column to 'list' as requested by user
+const hasMigratedListDefault = localStorage.getItem("boardColViews_migrated_v2");
+if (!hasMigratedListDefault) {
+    localStorage.setItem("boardColViews", JSON.stringify(boardColViews));
+    localStorage.setItem("boardColViews_migrated_v2", "true");
+}
+
+const savedColViews = localStorage.getItem("boardColViews");
+if (savedColViews) {
+    try {
+        boardColViews = JSON.parse(savedColViews);
+    } catch (e) {
+        console.error("Erro ao carregar boardColViews:", e);
+    }
+}
+
 // Snapshot unsubscribers for cleanup on logout
 let unsubscribeListeners = [];
 
@@ -4075,104 +4219,34 @@ async function generatePatrimonioCode() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function toggleBoardView() {
-    boardView = boardView === 'kanban' ? 'list' : 'kanban';
+    // Se alguma coluna estiver em modo 'kanban', mudamos TODAS para 'list'.
+    // Caso contrário (todas em 'list'), mudamos TODAS para 'kanban'.
+    const anyKanban = Object.values(boardColViews).some(v => v === 'kanban');
+    const targetMode = anyKanban ? 'list' : 'kanban';
+    
+    Object.keys(boardColViews).forEach(key => {
+        boardColViews[key] = targetMode;
+    });
+    
+    localStorage.setItem("boardColViews", JSON.stringify(boardColViews));
+    
+    boardView = targetMode;
     localStorage.setItem('boardView', boardView);
 
-    const kanban = document.getElementById("board-kanban-view");
-    const list = document.getElementById("board-list-view");
     const icon = document.getElementById("toggle-view-icon");
     const text = document.getElementById("toggle-view-text");
 
     if (boardView === 'list') {
-        if (kanban) kanban.classList.add("hidden");
-        if (list) list.classList.remove("hidden");
         if (icon) icon.setAttribute("data-lucide", "layout-dashboard");
-        if (text) text.textContent = "Modo Kanban";
+        if (text) text.textContent = "Modo Cards (Todos)";
     } else {
-        if (kanban) kanban.classList.remove("hidden");
-        if (list) list.classList.add("hidden");
         if (icon) icon.setAttribute("data-lucide", "list");
-        if (text) text.textContent = "Modo Lista";
+        if (text) text.textContent = "Modo Lista (Todos)";
     }
+    
     lucide.createIcons();
-
-    if (boardView === 'list') {
-        renderBoardList();
-    } else {
-        renderBoard();
-    }
-}
-
-function renderBoardList() {
-    const container = document.getElementById("board-list-view");
-    if (!container) return;
-
-    const searchEl = document.getElementById("filter-search");
-    const filialEl = document.getElementById("filter-filial");
-    const urgenciaEl = document.getElementById("filter-urgencia");
-    const searchQuery = searchEl ? searchEl.value.toLowerCase() : '';
-    const filialFilter = filialEl ? filialEl.value : '';
-    const urgenciaFilter = urgenciaEl ? urgenciaEl.value : '';
-
-    let allowedBranchIds = [];
-    if (currentUser && currentUser.role === 'Colaborador') {
-        allowedBranchIds = userFiliais.filter(uf => uf.id_usuario === currentUser.id).map(uf => uf.id_filial);
-    }
-
-    const filtered = projects.filter(p => {
-        if (currentUser && currentUser.role === 'Colaborador' && !allowedBranchIds.includes(p.id_filial)) return false;
-        if (searchQuery && !p.titulo.toLowerCase().includes(searchQuery)) return false;
-        if (filialFilter && p.id_filial !== filialFilter) return false;
-        if (urgenciaFilter && p.urgencia !== urgenciaFilter) return false;
-        return true;
-    });
-
-    const statusColors = {
-        "Banco de Ideias": "text-slate-400",
-        "Backlog de Implementação": "text-amber-400",
-        "Em Andamento": "text-accent-cyan",
-        "Concluído": "text-emerald-400"
-    };
-    const urgencyColors = {
-        "Baixa": "text-slate-400", "Média": "text-sky-400",
-        "Alta": "text-amber-400", "Crítica": "text-rose-400"
-    };
-
-    if (filtered.length === 0) {
-        container.innerHTML = `<div class="flex flex-col items-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-2xl">
-            <i data-lucide="inbox" class="h-8 w-8 mb-2 opacity-40"></i>
-            <span class="text-sm font-semibold">Nenhum projeto encontrado</span>
-        </div>`;
-        lucide.createIcons();
-        return;
-    }
-
-    container.innerHTML = filtered.map(p => {
-        const branch = branches.find(b => b.id === p.id_filial);
-        const branchName = branch ? branch.nome : "Sem filial";
-        const statusColor = statusColors[p.status] || 'text-slate-400';
-        const urgColor = urgencyColors[p.urgencia] || 'text-slate-400';
-        const descPreview = (p.descricao || '').slice(0, 200);
-
-        return `
-        <div class="glass border border-white/5 rounded-xl overflow-hidden transition-all duration-300">
-            <div onclick="toggleAccordion('${p.id}')" class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition select-none">
-                <i data-lucide="chevron-right" class="h-4 w-4 text-slate-500 transition-transform duration-200" id="acc-icon-${p.id}"></i>
-                <span class="flex-1 font-semibold text-slate-200 text-sm">${escapeHtml(p.titulo)}</span>
-                <span class="text-[10px] font-bold ${urgColor} bg-slate-900/60 px-2 py-0.5 rounded border border-current/20">${p.urgencia}</span>
-                <span class="text-[10px] font-semibold ${statusColor} hidden sm:block">${p.status}</span>
-                <span class="text-[10px] text-accent-cyan font-bold hidden md:block">${escapeHtml(branchName)}</span>
-            </div>
-            <div id="accordion-${p.id}" class="hidden px-4 pb-4 space-y-3 border-t border-white/5">
-                <p class="text-xs text-slate-400 whitespace-pre-wrap leading-relaxed pt-3">${escapeHtml(descPreview)}${p.descricao && p.descricao.length > 200 ? '...' : ''}</p>
-                <button onclick="openDetails('${p.id}')" class="flex items-center gap-1.5 text-xs font-bold text-accent-cyan hover:text-accent-teal transition">
-                    <i data-lucide="external-link" class="h-3.5 w-3.5"></i> Abrir Fluxo Completo
-                </button>
-            </div>
-        </div>`;
-    }).join('');
-    lucide.createIcons();
-}
+    renderBoard();
+}// Legacy renderBoardList removed as list-view is now integrated natively inside renderBoard column container logic.
 
 function toggleAccordion(projectId) {
     const body = document.getElementById(`accordion-${projectId}`);
@@ -4767,15 +4841,16 @@ const _origHandleAuthSessionExt = handleAuthSession;
 handleAuthSession = async function(user) {
     await _origHandleAuthSessionExt(user);
     if (user && currentUser) {
-        const kanban = document.getElementById("board-kanban-view");
-        const list = document.getElementById("board-list-view");
+        // Sincroniza o ícone e texto do botão global
+        const anyKanban = Object.values(boardColViews).some(v => v === 'kanban');
         const icon = document.getElementById("toggle-view-icon");
         const text = document.getElementById("toggle-view-text");
-        if (boardView === 'list') {
-            if (kanban) kanban.classList.add("hidden");
-            if (list) list.classList.remove("hidden");
+        if (!anyKanban) {
             if (icon) icon.setAttribute("data-lucide", "layout-dashboard");
-            if (text) text.textContent = "Modo Kanban";
+            if (text) text.textContent = "Modo Cards (Todos)";
+        } else {
+            if (icon) icon.setAttribute("data-lucide", "list");
+            if (text) text.textContent = "Modo Lista (Todos)";
         }
     } else {
         const wrapper = document.getElementById("notif-wrapper");
@@ -4792,9 +4867,6 @@ handleLogout = async function() {
 const _origRenderBoard = renderBoard;
 renderBoard = function() {
     _origRenderBoard();
-    if (boardView === 'list') {
-        renderBoardList();
-    }
 };
 
 const _origLoadRequests = loadRequests;
@@ -4830,10 +4902,79 @@ closeHardwareAssetModal = function() {
 // PWA: Service Worker Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
+let deferredPrompt;
+
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
+        navigator.serviceWorker.register('./sw.js')
+            .then((reg) => {
+                console.log('[PWA] Service Worker registrado com sucesso:', reg.scope);
+            })
+            .catch((err) => {
+                console.error('[PWA] Falha ao registrar Service Worker:', err);
+            });
     });
 }
 
-console.log('[AlemaozinhoSystem32 v2.0] Feature extensions loaded successfully.');
+// Captura o evento de instalação do PWA
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Impede o banner nativo automático imediato
+    e.preventDefault();
+    // Guarda o evento para disparar sob demanda
+    deferredPrompt = e;
+    // Exibe o botão de instalação elegante criado no HTML
+    const btnInstall = document.getElementById('btn-install-pwa');
+    if (btnInstall) {
+        btnInstall.classList.remove('hidden');
+    }
+    console.log('[PWA] Evento beforeinstallprompt capturado. Botão de instalação ativado.');
+});
+
+// Função para iniciar a instalação a partir do botão
+async function installPWA() {
+    if (!deferredPrompt) {
+        return;
+    }
+    // Mostra o prompt de instalação do navegador
+    deferredPrompt.prompt();
+    // Aguarda a resposta do usuário
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`[PWA] Escolha do usuário na instalação: ${outcome}`);
+    // Limpa a variável
+    deferredPrompt = null;
+    // Oculta o botão
+    const btnInstall = document.getElementById('btn-install-pwa');
+    if (btnInstall) {
+        btnInstall.classList.add('hidden');
+    }
+}
+
+// Detecta se a aplicação já está rodando em modo standalone (instalado)
+window.addEventListener('DOMContentLoaded', () => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    if (isStandalone) {
+        console.log('[PWA] Executando em modo Standalone (Aplicativo).');
+        const badgeStandalone = document.getElementById('pwa-standalone-badge');
+        if (badgeStandalone) {
+            badgeStandalone.classList.remove('hidden');
+        }
+    }
+});
+
+// Evento disparado quando o app é instalado com sucesso
+window.addEventListener('appinstalled', (evt) => {
+    console.log('[PWA] Aplicativo instalado com sucesso!');
+    const btnInstall = document.getElementById('btn-install-pwa');
+    if (btnInstall) {
+        btnInstall.classList.add('hidden');
+    }
+    const badgeStandalone = document.getElementById('pwa-standalone-badge');
+    if (badgeStandalone) {
+        badgeStandalone.classList.remove('hidden');
+    }
+    if (typeof showToast === 'function') {
+        showToast('AlemaozinhoSystem32 instalado com sucesso!', 'success');
+    }
+});
+
+console.log('[AlemaozinhoSystem32 v2.0] Feature extensions and PWA handlers loaded successfully.');
