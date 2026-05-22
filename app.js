@@ -519,7 +519,7 @@ function createCardDOM(proj) {
 
         <!-- Content -->
         <div>
-            <h4 class="font-outfit font-bold text-slate-100 group-hover:text-accent-purple transition duration-200">${proj.titulo}</h4>
+            <h4 class="font-outfit font-bold text-slate-100 group-hover:text-accent-cyan transition duration-200">${proj.titulo}</h4>
             <p class="text-xs text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">
                 ${proj.descricao || "Sem descrição fornecida."}
             </p>
@@ -538,7 +538,7 @@ function createCardDOM(proj) {
             const designatedName = designatedUser ? designatedUser.nome : null;
             return designatedName ? `
                 <div class="flex items-center gap-1.5 text-[10px] text-slate-300 bg-slate-950 border border-white/10 px-2.5 py-1 rounded-lg self-start mt-0.5 font-medium">
-                    <i data-lucide="user" class="h-3 w-3 text-accent-purple"></i>
+                    <i data-lucide="user" class="h-3 w-3 text-accent-cyan"></i>
                     <span>${designatedName}</span>
                 </div>
             ` : "";
@@ -546,8 +546,8 @@ function createCardDOM(proj) {
 
         <!-- Footer / Branch info -->
         <div class="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-white/5 mt-1">
-            <span onclick="event.stopPropagation(); openFilialPanel('${proj.id_filial}')" class="flex items-center gap-1 font-bold text-accent-purple/90 hover:text-accent-purple cursor-pointer transition duration-200">
-                <i data-lucide="building" class="h-3 w-3 text-accent-purple animate-pulse"></i> <u>${branchName}</u>
+            <span onclick="event.stopPropagation(); openFilialPanel('${proj.id_filial}')" class="flex items-center gap-1 font-bold text-accent-cyan/90 hover:text-accent-cyan cursor-pointer transition duration-200">
+                <i data-lucide="building" class="h-3 w-3 text-accent-cyan animate-pulse"></i> <u>${branchName}</u>
             </span>
             <span class="text-slate-400 font-semibold">${branchCity}</span>
         </div>
@@ -844,7 +844,7 @@ async function openDetails(projectId) {
     
     let statusClass = "bg-slate-800 text-slate-400 border-slate-700";
     if (proj.status === "Backlog de Implementação") statusClass = "bg-amber-950/60 text-amber-400 border-amber-500/20";
-    else if (proj.status === "Em Andamento") statusClass = "bg-purple-950/60 text-purple-400 border-purple-500/20";
+    else if (proj.status === "Em Andamento") statusClass = "bg-cyan-950/60 text-cyan-400 border-cyan-500/20";
     else if (proj.status === "Concluído") statusClass = "bg-emerald-950/60 text-emerald-400 border-emerald-500/20";
     bStatus.className = `text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${statusClass}`;
 
@@ -985,7 +985,7 @@ async function loadComments(projectId) {
                 commentBox.className = "p-2.5 rounded-lg bg-slate-900/60 border border-white/5 text-xs space-y-1.5";
                 commentBox.innerHTML = `
                     <div class="flex items-center justify-between text-[10px] text-slate-500">
-                        <span class="font-bold text-accent-purple">${c.autor}</span>
+                        <span class="font-bold text-accent-cyan">${c.autor}</span>
                         <span>${new Date(c.created_at).toLocaleString("pt-BR")}</span>
                     </div>
                     <p class="text-slate-300 leading-relaxed">${c.texto}</p>
@@ -1336,7 +1336,7 @@ function switchTab(tabId) {
         if (!tabBtn) return;
         
         if (t === tabId) {
-            tabBtn.className = "flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition duration-200 bg-accent-purple/10 text-accent-purple border border-accent-purple/20";
+            tabBtn.className = "flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition duration-200 bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20";
             if (viewSection) viewSection.classList.remove("hidden");
         } else {
             tabBtn.className = "flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl text-slate-400 hover:text-white border border-transparent transition duration-200";
@@ -1498,16 +1498,40 @@ async function handleAuthSession(user) {
             }
 
             if (!profile.aprovado) {
-                const errorBox = document.getElementById("auth-error-box");
-                const errorMsg = document.getElementById("auth-error-message");
-                if (errorBox && errorMsg) {
-                    errorMsg.textContent = "Acesso Pendente: Sua conta foi criada com sucesso, mas precisa ser liberada por um Administrador antes do primeiro acesso.";
-                    errorBox.classList.remove("hidden");
-                }
+                const pendingName = document.getElementById("pending-user-name");
+                const pendingEmail = document.getElementById("pending-user-email");
+                const pendingBranch = document.getElementById("pending-user-branch-text");
+                const modalPending = document.getElementById("modal-pending");
+                const modalAuth = document.getElementById("modal-auth");
+
+                if (pendingName) pendingName.textContent = profile.nome || "Novo Usuário";
+                if (pendingEmail) pendingEmail.textContent = profile.email || "";
+                if (pendingBranch) pendingBranch.textContent = profile.cidade || "Não especificada";
+
+                if (modalPending) modalPending.classList.remove("hidden");
+                if (modalAuth) modalAuth.classList.add("hidden");
+
                 showToast("Sua conta está pendente de aprovação por um Administrador.", "warning");
-                
-                currentUser = null;
-                await auth.signOut();
+
+                if (window._unsubPendingProfile) {
+                    window._unsubPendingProfile();
+                }
+                window._unsubPendingProfile = db.collection("perfis").doc(userId).onSnapshot(snap => {
+                    if (snap.exists) {
+                        const updated = snap.data();
+                        if (updated.aprovado) {
+                            if (window._unsubPendingProfile) {
+                                window._unsubPendingProfile();
+                                window._unsubPendingProfile = null;
+                            }
+                            showToast("Sua conta foi aprovada! Acessando o sistema...", "success");
+                            if (modalPending) modalPending.classList.add("hidden");
+                            handleAuthSession(user);
+                        }
+                    }
+                });
+
+                currentUser = profile;
                 return;
             }
 
@@ -1535,6 +1559,9 @@ async function handleAuthSession(user) {
         currentUser = null;
         applyUserContext();
         
+        const modalPending = document.getElementById("modal-pending");
+        if (modalPending) modalPending.classList.add("hidden");
+        
         const modalAuth = document.getElementById("modal-auth");
         if (modalAuth) modalAuth.classList.remove("hidden");
         
@@ -1557,6 +1584,7 @@ async function handleAuthSubmit(e) {
     const email = document.getElementById("auth-email").value.trim();
     const password = document.getElementById("auth-password").value;
     const nome = document.getElementById("auth-name").value.trim();
+    const cidade = document.getElementById("auth-cidade")?.value.trim() || "";
     
     const errorBox = document.getElementById("auth-error-box");
     const errorMessage = document.getElementById("auth-error-message");
@@ -1596,6 +1624,7 @@ async function handleAuthSubmit(e) {
                 id: user.uid,
                 nome: nome || email.split('@')[0],
                 email: email,
+                cidade: cidade,
                 role: isFirst ? "Administrador" : "Colaborador",
                 aprovado: isFirst ? true : false,
                 created_at: new Date().toISOString()
@@ -1607,9 +1636,6 @@ async function handleAuthSubmit(e) {
                 showToast("Conta de Administrador criada com sucesso!", "success");
             } else {
                 showToast("Conta criada! Aguarde a liberação do Administrador.", "warning");
-                errorMessage.textContent = "Cadastro concluído! Sua conta está pendente de liberação por um Administrador antes do primeiro acesso.";
-                errorBox.classList.remove("hidden");
-                await auth.signOut();
             }
         }
     } catch (error) {
@@ -1633,16 +1659,34 @@ async function handleLogout() {
     }
 }
 
+async function handlePendingLogout() {
+    try {
+        if (window._unsubPendingProfile) {
+            window._unsubPendingProfile();
+            window._unsubPendingProfile = null;
+        }
+        const modalPending = document.getElementById("modal-pending");
+        if (modalPending) modalPending.classList.add("hidden");
+        
+        showToast("Desconectando...", "info");
+        await auth.signOut();
+    } catch (e) {
+        showToast("Falha ao desconectar: " + e.message, "error");
+    }
+}
+
 function toggleAuthMode() {
     const title = document.getElementById("auth-title");
     const subtitle = document.getElementById("auth-subtitle");
     const fieldName = document.getElementById("auth-field-name");
+    const fieldCidade = document.getElementById("auth-field-cidade");
     const submitBtnText = document.getElementById("auth-btn-text");
     const toggleBtn = document.getElementById("auth-toggle-btn");
     const nameInput = document.getElementById("auth-name");
+    const cidadeInput = document.getElementById("auth-cidade");
     const errorBox = document.getElementById("auth-error-box");
     
-    if (!title || !subtitle || !fieldName || !submitBtnText || !toggleBtn || !nameInput || !errorBox) return;
+    if (!title || !subtitle || !fieldName || !fieldCidade || !submitBtnText || !toggleBtn || !nameInput || !cidadeInput || !errorBox) return;
     
     errorBox.classList.add("hidden");
 
@@ -1652,6 +1696,8 @@ function toggleAuthMode() {
         subtitle.textContent = "Cadastre-se para acessar o pipeline de filiais";
         fieldName.classList.remove("hidden");
         nameInput.required = true;
+        fieldCidade.classList.remove("hidden");
+        cidadeInput.required = true;
         submitBtnText.textContent = "Criar Conta e Acessar";
         toggleBtn.textContent = "Já tem uma conta? Fazer Login";
     } else {
@@ -1661,6 +1707,9 @@ function toggleAuthMode() {
         fieldName.classList.add("hidden");
         nameInput.required = false;
         nameInput.value = "";
+        fieldCidade.classList.add("hidden");
+        cidadeInput.required = false;
+        cidadeInput.value = "";
         submitBtnText.textContent = "Entrar no Sistema";
         toggleBtn.textContent = "Não tem uma conta? Cadastre-se";
     }
@@ -2044,7 +2093,7 @@ function renderAdminPanel() {
         }
 
         const roleBadge = p.role === "Administrador" 
-            ? `<span class="bg-purple-950/40 text-accent-purple border border-accent-purple/10 px-2 py-0.5 rounded font-extrabold text-xs uppercase">Admin</span>`
+            ? `<span class="bg-cyan-950/40 text-accent-cyan border border-accent-cyan/10 px-2 py-0.5 rounded font-extrabold text-xs uppercase">Admin</span>`
             : `<span class="bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded font-bold text-xs uppercase">Colaborador</span>`;
 
         const tr = document.createElement("tr");
@@ -2052,8 +2101,8 @@ function renderAdminPanel() {
         const pNomeEscaped = (p.nome || "").replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         tr.innerHTML = `
             <td class="px-6 py-4 font-semibold text-white">
-                <div class="flex items-center gap-2">
-                    <span>${p.nome || "Novo Usuário"}</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span>${p.nome || "Novo Usuário"} ${p.cidade ? `<span class="text-[10px] text-slate-400 font-normal font-mono">(${p.cidade})</span>` : ""}</span>
                     ${isPending ? `<span class="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-1.5 py-0.5 rounded-md animate-pulse" title="Novo cadastro aguardando liberação de acesso"><i data-lucide="shield-alert" class="h-3 w-3"></i> PENDENTE</span>` : ""}
                 </div>
             </td>
@@ -2066,7 +2115,7 @@ function renderAdminPanel() {
                     <span>Liberar Acesso</span>
                 </button>
                 ` : ""}
-                <button onclick="openPermissionsModal('${p.id}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-accent-purple/15 hover:bg-accent-purple/25 text-accent-purple border border-accent-purple/20 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm shadow-accent-purple/5">
+                <button onclick="openPermissionsModal('${p.id}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-accent-cyan/15 hover:bg-accent-cyan/25 text-accent-cyan border border-accent-cyan/20 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm shadow-accent-cyan/5">
                     <i data-lucide="shield" class="h-3.5 w-3.5"></i>
                     <span>Permissões</span>
                 </button>
@@ -2110,7 +2159,7 @@ function openPermissionsModal(userId) {
         const isChecked = allowedIds.includes(b.id);
         
         item.innerHTML = `
-            <input type="checkbox" id="perm-branch-${b.id}" value="${b.id}" ${isChecked ? 'checked' : ''} class="h-4 w-4 rounded border-slate-800 text-accent-purple bg-slate-950 focus:ring-accent-purple focus:ring-offset-slate-950 cursor-pointer">
+            <input type="checkbox" id="perm-branch-${b.id}" value="${b.id}" ${isChecked ? 'checked' : ''} class="h-4 w-4 rounded border-slate-800 text-accent-cyan bg-slate-950 focus:ring-accent-cyan focus:ring-offset-slate-950 cursor-pointer">
             <label for="perm-branch-${b.id}" class="text-xs font-semibold text-slate-300 cursor-pointer">
                 ${b.nome} (${b.cidade}/${b.estado})
             </label>
@@ -2338,7 +2387,7 @@ function switchFilialPanelTab(tabId) {
         if (!tabBtn) return;
         
         if (t === tabId) {
-            tabBtn.className = "flex items-center gap-2 px-4 py-2 text-sm font-bold border-b-2 border-accent-purple text-accent-purple";
+            tabBtn.className = "flex items-center gap-2 px-4 py-2 text-sm font-bold border-b-2 border-accent-cyan text-accent-cyan";
             if (tabContent) tabContent.classList.remove("hidden");
         } else {
             tabBtn.className = "flex items-center gap-2 px-4 py-2 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-white transition duration-200";
@@ -2473,7 +2522,7 @@ async function revealPassword(credId, clearTextPwd) {
     if (isMasked) {
         span.textContent = clearTextPwd;
         span.classList.remove("text-slate-400", "tracking-widest");
-        span.classList.add("text-accent-fuchsia", "font-bold");
+        span.classList.add("text-accent-teal", "font-bold");
         
         iconBtn.setAttribute("data-lucide", "eye-off");
         lucide.createIcons();
@@ -2481,7 +2530,7 @@ async function revealPassword(credId, clearTextPwd) {
         await logCredentialAccess(credId, "Visualização");
     } else {
         span.textContent = "••••••••";
-        span.classList.remove("text-accent-fuchsia", "font-bold");
+        span.classList.remove("text-accent-teal", "font-bold");
         span.classList.add("text-slate-400", "tracking-widest");
         
         iconBtn.setAttribute("data-lucide", "eye");
@@ -2689,7 +2738,7 @@ async function exportTechnicalData(format) {
                     <td style="padding: 8px; font-family: monospace;">${c.ip_local || "-"}</td>
                     <td style="padding: 8px; font-family: monospace;">${c.ip_publico || "-"}</td>
                     <td style="padding: 8px; font-family: monospace;">${c.usuario_acesso || "-"}</td>
-                    <td style="padding: 8px; font-family: monospace; font-weight: bold; color: #6d28d9;">${c.senha_limpa || "-"}</td>
+                    <td style="padding: 8px; font-family: monospace; font-weight: bold; color: #0e7490;">${c.senha_limpa || "-"}</td>
                     <td style="padding: 8px; color: #64748b;">${c.observacoes || "-"}</td>
                 </tr>
             `).join("");
@@ -2892,7 +2941,7 @@ function renderInventoryAssets() {
         
         let badgeColor = "bg-slate-800 text-slate-400 border-slate-700";
         if (a.status === 'Disponível') badgeColor = "bg-emerald-950/40 text-emerald-400 border-emerald-500/10";
-        else if (a.status === 'Em Uso') badgeColor = "bg-purple-950/40 text-purple-400 border-purple-500/10";
+        else if (a.status === 'Em Uso') badgeColor = "bg-cyan-950/40 text-cyan-400 border-cyan-500/10";
         else if (a.status === 'Manutenção') badgeColor = "bg-amber-950/40 text-amber-400 border-amber-500/10";
         else if (a.status === 'Sucata') badgeColor = "bg-rose-950/40 text-rose-400 border-rose-500/10";
 
@@ -2919,7 +2968,7 @@ function renderInventoryAssets() {
                 </div>
 
                 <!-- Asset Title -->
-                <h4 class="font-outfit font-extrabold text-base text-white group-hover:text-accent-fuchsia transition duration-200">${a.marca_modelo}</h4>
+                <h4 class="font-outfit font-extrabold text-base text-white group-hover:text-accent-teal transition duration-200">${a.marca_modelo}</h4>
                 <p class="text-xs text-slate-400 mt-1 font-semibold flex items-center gap-1">
                     <i data-lucide="tag" class="h-3 w-3 text-slate-500"></i> Categoria: <span class="text-slate-300 font-bold">${a.categoria}</span>
                 </p>
@@ -2941,7 +2990,7 @@ function renderInventoryAssets() {
                     <div class="flex justify-between">
                         <span class="text-slate-500 font-semibold">Local:</span>
                         <span class="text-slate-200 font-bold flex items-center gap-1">
-                            <i data-lucide="building" class="h-3 w-3 text-accent-purple"></i> ${locationName}
+                            <i data-lucide="building" class="h-3 w-3 text-accent-cyan"></i> ${locationName}
                         </span>
                     </div>
                     <div class="flex justify-between">
@@ -3208,7 +3257,7 @@ async function revealHardwarePassword(assetId, clearTextPwd) {
     if (isMasked) {
         span.textContent = clearTextPwd;
         span.classList.remove("text-slate-400", "tracking-widest");
-        span.classList.add("text-accent-fuchsia", "font-bold");
+        span.classList.add("text-accent-teal", "font-bold");
         
         iconBtn.setAttribute("data-lucide", "eye-off");
         lucide.createIcons();
@@ -3216,7 +3265,7 @@ async function revealHardwarePassword(assetId, clearTextPwd) {
         await logCredentialAccess(assetId, "Visualização Hardware");
     } else {
         span.textContent = "••••••••";
-        span.classList.remove("text-accent-fuchsia", "font-bold");
+        span.classList.remove("text-accent-teal", "font-bold");
         span.classList.add("text-slate-400", "tracking-widest");
         
         iconBtn.setAttribute("data-lucide", "eye");
@@ -3329,7 +3378,7 @@ function renderAdminPasswordsTable(list) {
         
         let typeBadgeColor = "bg-slate-800 text-slate-400 border-slate-700";
         if (item.tipo === "Servidor" || item.tipo === "Câmera/DVR" || item.tipo === "DVR/Câmeras") {
-            typeBadgeColor = "bg-purple-950/40 text-accent-purple border-accent-purple/10";
+            typeBadgeColor = "bg-cyan-950/40 text-accent-cyan border-accent-cyan/10";
         } else if (item.tipo === "Computador" || item.tipo === "Monitor") {
             typeBadgeColor = "bg-emerald-950/40 text-accent-emerald border-emerald-500/10";
         } else if (item.tipo === "Equipamento de Rede" || item.tipo === "Switch/Roteador") {
@@ -3338,7 +3387,7 @@ function renderAdminPasswordsTable(list) {
         
         let originBadgeColor = "bg-indigo-950/40 text-indigo-400 border-indigo-500/10";
         if (item.isHardware) {
-            originBadgeColor = "bg-fuchsia-950/40 text-accent-fuchsia border-accent-fuchsia/10";
+            originBadgeColor = "bg-teal-950/40 text-accent-teal border-accent-teal/10";
         }
         
         tr.innerHTML = `
@@ -3393,7 +3442,7 @@ async function revealAdminCentralPassword(id, idx, clearTextPwd, isHardware) {
     if (isMasked) {
         span.textContent = clearTextPwd;
         span.classList.remove("text-slate-400", "tracking-widest");
-        span.classList.add("text-accent-fuchsia", "font-bold");
+        span.classList.add("text-accent-teal", "font-bold");
         
         iconBtn.setAttribute("data-lucide", "eye-off");
         lucide.createIcons();
@@ -3405,7 +3454,7 @@ async function revealAdminCentralPassword(id, idx, clearTextPwd, isHardware) {
         }
     } else {
         span.textContent = "••••••••";
-        span.classList.remove("text-accent-fuchsia", "font-bold");
+        span.classList.remove("text-accent-teal", "font-bold");
         span.classList.add("text-slate-400", "tracking-widest");
         
         iconBtn.setAttribute("data-lucide", "eye");
@@ -3506,7 +3555,7 @@ async function loadFilialHardware(filialId) {
                 
                 let badgeColor = "bg-slate-800 text-slate-400 border-slate-700";
                 if (a.status === 'Disponível') badgeColor = "bg-emerald-950/40 text-emerald-400 border-emerald-500/10";
-                else if (a.status === 'Em Uso') badgeColor = "bg-purple-950/40 text-purple-400 border-purple-500/10";
+                else if (a.status === 'Em Uso') badgeColor = "bg-cyan-950/40 text-cyan-400 border-cyan-500/10";
                 else if (a.status === 'Manutenção') badgeColor = "bg-amber-950/40 text-amber-400 border-amber-500/10";
                 else if (a.status === 'Sucata') badgeColor = "bg-rose-950/40 text-rose-400 border-rose-500/10";
 
@@ -3663,13 +3712,13 @@ async function openAssetHistoryModal(assetId) {
                 item.className = "relative mb-6";
                 
                 item.innerHTML = `
-                    <span class="absolute -left-10 top-1.5 h-3.5 w-3.5 rounded-full bg-accent-purple border-4 border-slate-950 flex items-center justify-center"></span>
+                    <span class="absolute -left-10 top-1.5 h-3.5 w-3.5 rounded-full bg-accent-cyan border-4 border-slate-950 flex items-center justify-center"></span>
                     <div class="bg-slate-900/50 border border-white/5 rounded-xl p-3 shadow-sm">
                         <div class="flex items-center justify-between gap-2 mb-1.5">
                             <span class="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
                                 <i data-lucide="calendar" class="h-3 w-3 text-slate-500"></i> ${dateFormatted}
                             </span>
-                            <span class="text-[10px] text-accent-purple font-extrabold flex items-center gap-1">
+                            <span class="text-[10px] text-accent-cyan font-extrabold flex items-center gap-1">
                                 <i data-lucide="user" class="h-3 w-3"></i> ${h.usuario_nome}
                             </span>
                         </div>
@@ -3760,6 +3809,10 @@ let selectedHardwareFile = null;
 function cleanupListeners() {
     unsubscribeListeners.forEach(unsub => { try { unsub(); } catch (e) {} });
     unsubscribeListeners = [];
+    if (window._unsubPendingProfile) {
+        try { window._unsubPendingProfile(); } catch (e) {}
+        window._unsubPendingProfile = null;
+    }
     console.log('[RT] All snapshot listeners cleaned up.');
 }
 
@@ -3902,14 +3955,14 @@ function renderNotificationsPanel() {
         const timeAgo = formatTimeAgo(n.created_at);
         return `
         <div onclick="openNotifProject('${n.id_projeto}', '${n.id}')" class="flex items-start gap-3 px-4 py-3 hover:bg-white/5 cursor-pointer transition">
-            <div class="mt-0.5 p-1.5 rounded-lg bg-accent-purple/15 text-accent-purple flex-shrink-0">
+            <div class="mt-0.5 p-1.5 rounded-lg bg-accent-cyan/15 text-accent-cyan flex-shrink-0">
                 <i data-lucide="${icon}" class="h-3.5 w-3.5"></i>
             </div>
             <div class="flex-1 min-w-0">
                 <p class="text-xs text-slate-200 font-medium leading-snug">${escapeHtml(n.mensagem || '')}</p>
                 <p class="text-[10px] text-slate-500 mt-0.5">${timeAgo}</p>
             </div>
-            <span class="h-1.5 w-1.5 rounded-full bg-accent-purple flex-shrink-0 mt-1.5"></span>
+            <span class="h-1.5 w-1.5 rounded-full bg-accent-cyan flex-shrink-0 mt-1.5"></span>
         </div>`;
     }).join('');
     lucide.createIcons();
@@ -4077,7 +4130,7 @@ function renderBoardList() {
     const statusColors = {
         "Banco de Ideias": "text-slate-400",
         "Backlog de Implementação": "text-amber-400",
-        "Em Andamento": "text-accent-purple",
+        "Em Andamento": "text-accent-cyan",
         "Concluído": "text-emerald-400"
     };
     const urgencyColors = {
@@ -4108,11 +4161,11 @@ function renderBoardList() {
                 <span class="flex-1 font-semibold text-slate-200 text-sm">${escapeHtml(p.titulo)}</span>
                 <span class="text-[10px] font-bold ${urgColor} bg-slate-900/60 px-2 py-0.5 rounded border border-current/20">${p.urgencia}</span>
                 <span class="text-[10px] font-semibold ${statusColor} hidden sm:block">${p.status}</span>
-                <span class="text-[10px] text-accent-purple font-bold hidden md:block">${escapeHtml(branchName)}</span>
+                <span class="text-[10px] text-accent-cyan font-bold hidden md:block">${escapeHtml(branchName)}</span>
             </div>
             <div id="accordion-${p.id}" class="hidden px-4 pb-4 space-y-3 border-t border-white/5">
                 <p class="text-xs text-slate-400 whitespace-pre-wrap leading-relaxed pt-3">${escapeHtml(descPreview)}${p.descricao && p.descricao.length > 200 ? '...' : ''}</p>
-                <button onclick="openDetails('${p.id}')" class="flex items-center gap-1.5 text-xs font-bold text-accent-purple hover:text-accent-fuchsia transition">
+                <button onclick="openDetails('${p.id}')" class="flex items-center gap-1.5 text-xs font-bold text-accent-cyan hover:text-accent-teal transition">
                     <i data-lucide="external-link" class="h-3.5 w-3.5"></i> Abrir Fluxo Completo
                 </button>
             </div>
