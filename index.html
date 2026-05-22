@@ -1,0 +1,1789 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlemaozinhoSystem32 - Gestão de Projetos Inteligente</title>
+    
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        outfit: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        slate: {
+                            950: '#030712',
+                        },
+                        accent: {
+                            purple: '#8b5cf6',
+                            fuchsia: '#d946ef',
+                            rose: '#f43f5e',
+                            emerald: '#10b981',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Firebase SDK Compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top right, rgba(139, 92, 246, 0.08), transparent 40%),
+                        radial-gradient(circle at bottom left, rgba(217, 70, 239, 0.05), transparent 40%),
+                        #030712;
+            background-attachment: fixed;
+        }
+        
+        .glass {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        
+        .glass-hover:hover {
+            background: rgba(15, 23, 42, 0.85);
+            border-color: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 10px 30px -10px rgba(139, 92, 246, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .pulse-critical {
+            animation: pulse-border 2s infinite alternate;
+        }
+
+        @keyframes pulse-border {
+            0% {
+                border-color: rgba(244, 63, 94, 0.3);
+                box-shadow: 0 0 5px rgba(244, 63, 94, 0.2);
+            }
+            100% {
+                border-color: rgba(244, 63, 94, 1);
+                box-shadow: 0 0 15px rgba(244, 63, 94, 0.5);
+            }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(139, 92, 246, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(139, 92, 246, 0.6);
+        }
+
+        /* --- CONTROLE DE VISIBILIDADE DOS ÍCONES DO TEMA --- */
+        #theme-sun-icon {
+            display: block !important;
+        }
+        #theme-moon-icon {
+            display: none !important;
+        }
+        .light-theme #theme-sun-icon {
+            display: none !important;
+        }
+        .light-theme #theme-moon-icon {
+            display: block !important;
+        }
+
+        /* --- ESTILOS DO MODO CLARO (.light-theme) --- */
+        html.light-theme,
+        .light-theme body {
+            background: radial-gradient(circle at top right, rgba(139, 92, 246, 0.05), transparent 45%),
+                        radial-gradient(circle at bottom left, rgba(217, 70, 239, 0.04), transparent 45%),
+                        #f8fafc !important; /* slate-50 */
+            color: #1e293b !important; /* slate-800 */
+        }
+
+        /* Glassmorphism Claro */
+        .light-theme .glass {
+            background: rgba(255, 255, 255, 0.75) !important;
+            border-color: rgba(15, 23, 42, 0.06) !important;
+            box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+        }
+
+        .light-theme .glass-hover:hover {
+            background: rgba(255, 255, 255, 0.9) !important;
+            border-color: rgba(139, 92, 246, 0.25) !important;
+            box-shadow: 0 12px 30px -8px rgba(139, 92, 246, 0.1) !important;
+        }
+
+        /* Textos e Contraste Gerais (Evitando quebrar botões/badges com fundo colorido) */
+        .light-theme .text-slate-100,
+        .light-theme .text-slate-200,
+        .light-theme h2,
+        .light-theme h3,
+        .light-theme #stat-total {
+            color: #0f172a !important; /* slate-900 */
+        }
+
+        .light-theme .text-slate-300 {
+            color: #334155 !important; /* slate-700 */
+        }
+
+        .light-theme .text-slate-400 {
+            color: #475569 !important; /* slate-600 */
+        }
+
+        .light-theme .text-slate-500 {
+            color: #64748b !important; /* slate-500 */
+        }
+
+        /* Logo Brand Text */
+        .light-theme .logo-title {
+            background-image: linear-gradient(to right, #0f172a, #334155, #8b5cf6) !important;
+        }
+
+        /* Inputs, Selects e Textareas */
+        .light-theme select,
+        .light-theme input,
+        .light-theme textarea {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important; /* slate-300 */
+            color: #0f172a !important; /* slate-900 */
+        }
+
+        .light-theme select::placeholder,
+        .light-theme input::placeholder,
+        .light-theme textarea::placeholder {
+            color: #94a3b8 !important; /* slate-400 */
+        }
+
+        /* Wrappers e Elementos bg-slate-900 / bg-slate-950 */
+        .light-theme .bg-slate-900,
+        .light-theme .bg-slate-900\/30,
+        .light-theme .bg-slate-950\/40,
+        .light-theme .bg-slate-950 {
+            background-color: #ffffff !important;
+        }
+
+        /* Override específico de bg-slate-950 no preview de imagens e badges */
+        .light-theme div.bg-slate-950 {
+            background-color: #f1f5f9 !important;
+        }
+
+        /* Override específico de bordas */
+        .light-theme .border-slate-800,
+        .light-theme .border-slate-800\/60,
+        .light-theme .border-white\/5,
+        .light-theme .border-white\/10 {
+            border-color: rgba(15, 23, 42, 0.08) !important;
+        }
+
+        /* Customizações Especiais para Botões secundários */
+        .light-theme #btn-create-filial,
+        .light-theme #theme-toggle {
+            background-color: #ffffff !important;
+            border-color: #e2e8f0 !important;
+            color: #475569 !important;
+        }
+
+        .light-theme #btn-create-filial:hover,
+        .light-theme #theme-toggle:hover {
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
+        }
+
+        /* Botão Rápido de Solicitação de Serviço */
+        .light-theme #btn-quick-request {
+            background-color: #e0e7ff !important;
+            border-color: #c7d2fe !important;
+            color: #4f46e5 !important;
+        }
+        .light-theme #btn-quick-request:hover {
+            background-color: #e0e7ff !important;
+            opacity: 0.9;
+        }
+
+        /* Abas ativas e inativas */
+        .light-theme #tab-solicitacoes.text-slate-400:hover,
+        .light-theme #tab-admin-panel.text-slate-400:hover {
+            color: #0f172a !important;
+        }
+
+        /* Divisores de Tabelas e Containers */
+        .light-theme .divide-white\/5 > :not([hidden]) ~ :not([hidden]) {
+            border-color: rgba(15, 23, 42, 0.06) !important;
+        }
+
+        .light-theme th {
+            background-color: #f1f5f9 !important;
+            color: #475569 !important;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+        }
+
+        /* --- SOBRESCRITAS DE CORES DE STATUS & URGÊNCIA (ACESSIBILIDADE LIGHT) --- */
+        
+        /* Baixa / Padrão */
+        .light-theme .bg-slate-800,
+        .light-theme .bg-slate-800\/80 {
+            background-color: #f1f5f9 !important;
+            color: #475569 !important;
+            border-color: #e2e8f0 !important;
+        }
+        .light-theme .bg-slate-800\/80.text-slate-400 {
+            color: #475569 !important;
+        }
+
+        /* Média / Sky */
+        .light-theme .bg-sky-950\/40,
+        .light-theme .bg-sky-950\/60 {
+            background-color: #e0f2fe !important;
+            border-color: #bae6fd !important;
+        }
+        .light-theme .text-sky-400 {
+            color: #0369a1 !important; /* sky-700 */
+        }
+
+        /* Alta / Backlog / Amber */
+        .light-theme .bg-amber-950\/40,
+        .light-theme .bg-amber-950\/60 {
+            background-color: #fef3c7 !important;
+            border-color: #fde68a !important;
+        }
+        .light-theme .text-amber-400 {
+            color: #b45309 !important; /* amber-700 */
+        }
+
+        /* Crítica / Impedimento / Rose */
+        .light-theme .bg-rose-950\/40,
+        .light-theme .bg-rose-950\/60 {
+            background-color: #fee2e2 !important;
+            border-color: #fecaca !important;
+        }
+        .light-theme .text-rose-400 {
+            color: #b91c1c !important; /* rose-700 */
+        }
+
+        /* Em Andamento / Foco / Purple */
+        .light-theme .bg-purple-950\/40,
+        .light-theme .bg-purple-950\/60 {
+            background-color: #f3e8ff !important;
+            border-color: #e9d5ff !important;
+        }
+        .light-theme .text-purple-400,
+        .light-theme .text-accent-purple {
+            color: #6d28d9 !important; /* purple-700 */
+        }
+
+        /* Concluído / Fim / Emerald */
+        .light-theme .bg-emerald-950\/40,
+        .light-theme .bg-emerald-950\/60 {
+            background-color: #d1fae5 !important;
+            border-color: #a7f3d0 !important;
+        }
+        .light-theme .text-emerald-400,
+        .light-theme .text-accent-emerald {
+            color: #047857 !important; /* emerald-700 */
+        }
+
+        /* Correções de bordas dos badges do Lucide */
+        .light-theme .border-sky-500\/20,
+        .light-theme .border-sky-500\/10 {
+            border-color: #bae6fd !important;
+        }
+        .light-theme .border-amber-500\/20,
+        .light-theme .border-amber-500\/10 {
+            border-color: #fde68a !important;
+        }
+        .light-theme .border-rose-500\/20,
+        .light-theme .border-rose-500\/10 {
+            border-color: #fecaca !important;
+        }
+        .light-theme .border-purple-500\/20,
+        .light-theme .border-purple-500\/10 {
+            border-color: #e9d5ff !important;
+        }
+        .light-theme .border-emerald-500\/20,
+        .light-theme .border-emerald-500\/10 {
+            border-color: #a7f3d0 !important;
+        }
+
+        /* Estagnado e Impedimento Alertas Internos */
+        .light-theme .bg-rose-950\/15 {
+            background-color: rgba(254, 226, 226, 0.4) !important;
+        }
+
+        /* --- ESTILOS DE MODAIS NO MODO CLARO --- */
+        .light-theme [id^="modal-"],
+        .light-theme .fixed.inset-0.z-50 {
+            background-color: rgba(15, 23, 42, 0.4) !important;
+        }
+
+        .light-theme [id^="modal-"] .glass,
+        .light-theme .fixed.inset-0.z-50 .glass {
+            background-color: rgba(255, 255, 255, 0.98) !important;
+            border-color: rgba(15, 23, 42, 0.08) !important;
+            box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.15), 0 0 1px rgba(15, 23, 42, 0.1) !important;
+        }
+
+        .light-theme [id^="modal-"] h3.text-white,
+        .light-theme [id^="modal-"] .text-white,
+        .light-theme .fixed.inset-0.z-50 h3.text-white,
+        .light-theme .fixed.inset-0.z-50 .text-white {
+            color: #0f172a !important;
+        }
+
+        .light-theme [id^="modal-"] button.absolute:hover,
+        .light-theme .fixed.inset-0.z-50 button.absolute:hover {
+            color: #0f172a !important;
+        }
+
+        .light-theme [id^="modal-"] label,
+        .light-theme [id^="modal-"] .text-slate-300,
+        .light-theme [id^="modal-"] .text-slate-400,
+        .light-theme .fixed.inset-0.z-50 label,
+        .light-theme .fixed.inset-0.z-50 .text-slate-300,
+        .light-theme .fixed.inset-0.z-50 .text-slate-400 {
+            color: #334155 !important;
+        }
+
+        .light-theme #details-descricao {
+            background-color: #f1f5f9 !important;
+            border-color: #e2e8f0 !important;
+            color: #1e293b !important;
+        }
+
+        .light-theme [id^="modal-"] .bg-slate-900,
+        .light-theme [id^="modal-"] .bg-slate-900\/50,
+        .light-theme [id^="modal-"] .bg-slate-900\/40,
+        .light-theme [id^="modal-"] .bg-slate-950,
+        .light-theme .fixed.inset-0.z-50 .bg-slate-900,
+        .light-theme .fixed.inset-0.z-50 .bg-slate-900\/50,
+        .light-theme .fixed.inset-0.z-50 .bg-slate-900\/40,
+        .light-theme .fixed.inset-0.z-50 .bg-slate-950 {
+            background-color: #f8fafc !important;
+            border-color: #e2e8f0 !important;
+        }
+
+        .light-theme [id^="modal-"] input,
+        .light-theme [id^="modal-"] select,
+        .light-theme [id^="modal-"] textarea,
+        .light-theme .fixed.inset-0.z-50 input,
+        .light-theme .fixed.inset-0.z-50 select,
+        .light-theme .fixed.inset-0.z-50 textarea {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #0f172a !important;
+        }
+
+        .light-theme [id^="modal-"] label[for="proj-foto"],
+        .light-theme [id^="modal-"] label[for="req-foto"],
+        .light-theme .fixed.inset-0.z-50 label[for="proj-foto"],
+        .light-theme .fixed.inset-0.z-50 label[for="req-foto"] {
+            background-color: #f1f5f9 !important;
+            border-color: #cbd5e1 !important;
+            color: #475569 !important;
+        }
+
+        .light-theme [id^="modal-"] label[for="proj-foto"]:hover,
+        .light-theme [id^="modal-"] label[for="req-foto"]:hover,
+        .light-theme .fixed.inset-0.z-50 label[for="proj-foto"]:hover,
+        .light-theme .fixed.inset-0.z-50 label[for="req-foto"]:hover {
+            background-color: #e2e8f0 !important;
+            color: #0f172a !important;
+        }
+
+        .light-theme [id^="modal-"] button.bg-slate-900,
+        .light-theme .fixed.inset-0.z-50 button.bg-slate-900 {
+            background-color: #f1f5f9 !important;
+            border-color: #cbd5e1 !important;
+            color: #475569 !important;
+        }
+
+        .light-theme [id^="modal-"] button.bg-slate-900:hover,
+        .light-theme .fixed.inset-0.z-50 button.bg-slate-900:hover {
+            background-color: #e2e8f0 !important;
+            color: #0f172a !important;
+        }
+
+        .light-theme #permissions-filiais-list input[type="checkbox"] {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+        }
+
+        .light-theme #details-mover-container {
+            background-color: #f1f5f9 !important;
+            border-color: #e2e8f0 !important;
+        }
+
+        .light-theme #details-mover-container button {
+            color: #475569 !important;
+        }
+
+        .light-theme #details-mover-container button:hover {
+            background-color: #e2e8f0 !important;
+            color: #0f172a !important;
+        }
+
+        /* Scrollbars */
+        .light-theme ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.03) !important;
+        }
+        .light-theme ::-webkit-scrollbar-thumb {
+            background: rgba(139, 92, 246, 0.2) !important;
+        }
+        .light-theme ::-webkit-scrollbar-thumb:hover {
+            background: rgba(139, 92, 246, 0.4) !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-12 transition-all duration-300">
+
+    <!-- Top Glow Effect -->
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[1px] bg-gradient-to-r from-transparent via-accent-purple to-transparent opacity-50"></div>
+
+    <!-- Header & Navigation -->
+    <header class="sticky top-0 z-40 w-full glass border-b border-white/5 px-4 lg:px-8 py-4 mb-4 hidden">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <!-- Brand Logo -->
+            <div class="flex items-center space-x-3">
+                <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-accent-purple to-accent-fuchsia flex items-center justify-center shadow-lg shadow-accent-purple/20">
+                    <i data-lucide="zap" class="h-6 w-6 text-white animate-pulse"></i>
+                </div>
+                <div>
+                    <h1 class="logo-title text-2xl font-bold font-outfit tracking-tight bg-gradient-to-r from-white via-slate-200 to-accent-purple bg-clip-text text-transparent">
+                        AlemaozinhoSystem32
+                    </h1>
+                    <p class="text-xs text-slate-400 font-medium tracking-wide uppercase">Pipeline de Projetos Multi-Filiais</p>
+                </div>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="hidden lg:flex items-center space-x-6 glass rounded-xl px-4 py-2 border border-white/5">
+                <div class="text-center">
+                    <span class="block text-xs text-slate-400 uppercase">Total</span>
+                    <span id="stat-total" class="font-outfit font-bold text-lg text-white">0</span>
+                </div>
+                <div class="h-6 w-[1px] bg-slate-800"></div>
+                <div class="text-center">
+                    <span class="block text-xs text-slate-400 uppercase">Em Foco</span>
+                    <span id="stat-focus" class="font-outfit font-bold text-lg text-accent-purple">0</span>
+                </div>
+                <div class="h-6 w-[1px] bg-slate-800"></div>
+                <div class="text-center">
+                    <span class="block text-xs text-slate-400 uppercase">Parados (>24h)</span>
+                    <span id="stat-stagnant" class="font-outfit font-bold text-lg text-accent-rose">0</span>
+                </div>
+                <div class="h-6 w-[1px] bg-slate-800"></div>
+                <div class="text-center">
+                    <span class="block text-xs text-slate-400 uppercase">Concluídos</span>
+                    <span id="stat-completed" class="font-outfit font-bold text-lg text-accent-emerald">0</span>
+                </div>
+            </div>
+
+            <!-- Connections & Controls -->
+            <div class="flex items-center flex-wrap gap-3">
+                <!-- VINCULO E SELETOR DE PERFIS (NOVO) -->
+                <div id="user-switcher-container" class="relative flex items-center bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 shadow">
+                    <i data-lucide="users" class="h-4 w-4 text-accent-purple mr-2 ml-1"></i>
+                    <select id="user-switcher" onchange="switchUser()" class="bg-transparent text-xs font-bold text-slate-200 focus:outline-none pr-6 py-1 appearance-none cursor-pointer">
+                        <!-- Populado dinamicamente via JS -->
+                    </select>
+                    <span class="absolute right-3 pointer-events-none text-slate-500">
+                        <i data-lucide="chevron-down" class="h-3.5 w-3.5"></i>
+                    </span>
+                </div>
+
+                <!-- Botão Fazer Login (Firebase) [Novo] -->
+                <button id="btn-login-trigger" onclick="openLoginFlow()" class="flex items-center space-x-1.5 text-xs font-bold px-3 py-2 rounded-xl transition duration-300 bg-gradient-to-r from-accent-purple to-accent-fuchsia hover:opacity-95 text-white shadow-lg shadow-accent-purple/20" title="Entrar com usuário e senha do Firebase">
+                    <i data-lucide="log-in" class="h-4 w-4"></i>
+                    <span>Fazer Login</span>
+                </button>
+
+                <!-- Widget de Usuário Autenticado [Novo] -->
+                <div id="user-profile-widget" class="hidden items-center bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 shadow gap-3">
+                    <div class="flex items-center space-x-2">
+                        <div class="h-6 w-6 rounded-full bg-gradient-to-tr from-accent-purple to-accent-fuchsia flex items-center justify-center shadow shadow-accent-purple/30">
+                            <span id="user-avatar-initials" class="text-[10px] font-extrabold text-white"></span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span id="user-profile-name" class="text-xs font-bold text-slate-200 leading-tight"></span>
+                            <span id="user-profile-role" class="text-[9px] text-slate-400 font-semibold leading-tight"></span>
+                        </div>
+                    </div>
+                    <div class="h-4 w-[1px] bg-slate-800"></div>
+                    <button onclick="handleLogout()" class="text-slate-400 hover:text-rose-400 transition duration-200 p-0.5" title="Sair do Sistema">
+                        <i data-lucide="log-out" class="h-4 w-4"></i>
+                    </button>
+                </div>
+
+                <!-- Botão de Alternância de Tema -->
+                <button id="theme-toggle" onclick="toggleTheme()" class="flex items-center justify-center h-10 w-10 rounded-xl glass hover:bg-slate-900 border border-white/5 transition duration-300 text-slate-400 hover:text-white" title="Alternar Tema">
+                    <i data-lucide="sun" class="h-5 w-5" id="theme-sun-icon"></i>
+                    <i data-lucide="moon" class="h-5 w-5" id="theme-moon-icon"></i>
+                </button>
+
+                <!-- Connection Status -->
+                <button onclick="openSettingsModal()" id="btn-status" class="flex items-center space-x-2 text-xs font-semibold px-3 py-2.5 rounded-xl transition duration-300 glass hover:bg-slate-900 border border-amber-500/20 text-amber-400">
+                    <span class="h-2.5 w-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                    <span id="status-text">Demonstração Local</span>
+                    <i data-lucide="settings" class="h-4.5 w-4.5"></i>
+                </button>
+
+                <!-- Actions -->
+                <button id="btn-create-filial" onclick="openFilialModal()" class="flex items-center space-x-1.5 text-xs font-bold px-3 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition duration-300">
+                    <i data-lucide="plus-circle" class="h-4 w-4"></i>
+                    <span>Filial</span>
+                </button>
+
+                <button id="btn-create-projeto" onclick="openProjectModal()" class="flex items-center space-x-1.5 text-xs font-bold px-4 py-2.5 bg-gradient-to-r from-accent-purple to-accent-fuchsia hover:opacity-90 rounded-xl shadow-lg shadow-accent-purple/20 transition duration-300">
+                    <i data-lucide="plus" class="h-4 w-4"></i>
+                    <span>Novo Projeto</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- NAVEGAÇÃO ENTRE ABAS (NOVO) -->
+    <nav class="max-w-7xl mx-auto px-4 lg:px-8 mb-6 flex items-center justify-between border-b border-white/5 pb-2 hidden">
+        <div class="flex items-center gap-1.5 overflow-x-auto">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition duration-200 bg-accent-purple/10 text-accent-purple border border-accent-purple/20">
+                <i data-lucide="layout-dashboard" class="h-4 w-4"></i> Dashboard
+            </button>
+            
+            <button onclick="switchTab('solicitacoes')" id="tab-solicitacoes" class="flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl text-slate-400 hover:text-white border border-transparent transition duration-200">
+                <i data-lucide="inbox" class="h-4 w-4"></i> Solicitações
+                <span id="badge-solicitacoes-count" class="hidden text-[10px] bg-rose-600 px-1.5 py-0.5 rounded-full font-extrabold text-white">0</span>
+            </button>
+
+            <button onclick="switchTab('inventario')" id="tab-inventario" class="flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl text-slate-400 hover:text-white border border-transparent transition duration-200">
+                <i data-lucide="package" class="h-4 w-4"></i> Inventário
+            </button>
+
+            <button onclick="switchTab('admin-panel')" id="tab-admin-panel" class="hidden flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl text-slate-400 hover:text-white border border-transparent transition duration-200">
+                <i data-lucide="shield" class="h-4 w-4"></i> Controle Admin
+            </button>
+        </div>
+        
+        <!-- Ação Rápida para Solicitações (Colaboradores e Geral) -->
+        <button onclick="openRequestModal()" id="btn-quick-request" class="flex items-center space-x-1.5 text-xs font-bold px-3 py-2 bg-indigo-950/40 hover:bg-indigo-900/30 border border-indigo-500/20 text-indigo-400 rounded-xl transition duration-300">
+            <i data-lucide="ticket" class="h-4 w-4 text-indigo-400"></i>
+            <span>Solicitar Serviço</span>
+        </button>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 lg:px-8 hidden">
+        
+        <!-- SECTION 1: DASHBOARD VIEWER -->
+        <section id="view-dashboard" class="space-y-8">
+            <!-- Filters Area -->
+            <div class="glass rounded-2xl p-4 lg:p-6 border border-white/5 shadow-xl">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="filter" class="h-5 w-5 text-accent-purple"></i>
+                        <h2 class="font-outfit font-semibold text-lg text-white">Filtros Inteligentes</h2>
+                    </div>
+                    <button onclick="clearFilters()" class="text-xs font-medium text-slate-400 hover:text-white flex items-center gap-1 transition duration-200">
+                        <i data-lucide="rotate-ccw" class="h-3.5 w-3.5"></i> Limpar Filtros
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Search Input -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="search" class="h-4 w-4"></i>
+                        </span>
+                        <input type="text" id="filter-search" oninput="applyFilters()" placeholder="Buscar projetos..." class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-accent-purple transition duration-250">
+                    </div>
+
+                    <!-- Filial Dropdown -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="building" class="h-4 w-4"></i>
+                        </span>
+                        <select id="filter-filial" onchange="applyFilters()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple transition duration-250 appearance-none">
+                            <option value="">Filiais: Todas</option>
+                        </select>
+                    </div>
+
+                    <!-- Cidade Dropdown -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="map-pin" class="h-4 w-4"></i>
+                        </span>
+                        <select id="filter-cidade" onchange="applyFilters()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple transition duration-250 appearance-none">
+                            <option value="">Cidades: Todas</option>
+                        </select>
+                    </div>
+
+                    <!-- Urgencia Dropdown -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="alert-triangle" class="h-4 w-4"></i>
+                        </span>
+                        <select id="filter-urgencia" onchange="applyFilters()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple transition duration-250 appearance-none">
+                            <option value="">Urgência: Todas</option>
+                            <option value="Baixa">Urgência: Baixa</option>
+                            <option value="Média">Urgência: Média</option>
+                            <option value="Alta">Urgência: Alta</option>
+                            <option value="Crítica">Urgência: Crítica</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pipeline Kanban Board -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+                
+                <!-- Column 1: Banco de Ideias -->
+                <div class="flex flex-col h-full rounded-2xl glass border-slate-800/60 p-4 min-h-[500px]">
+                    <div class="flex items-center justify-between pb-3 mb-4 border-b border-white/5">
+                        <div class="flex items-center space-x-2">
+                            <span class="h-2.5 w-2.5 rounded-full bg-slate-400"></span>
+                            <h3 class="font-outfit font-bold text-slate-200">Banco de Ideias</h3>
+                        </div>
+                        <span id="count-ideias" class="text-xs bg-slate-800/80 px-2.5 py-1 rounded-full font-bold text-slate-300">0</span>
+                    </div>
+                    <div id="col-ideias" class="flex flex-col gap-4 flex-grow" ondragover="allowDrop(event)" ondrop="drop(event, 'Banco de Ideias')">
+                        <!-- Cards injected via JS -->
+                    </div>
+                </div>
+
+                <!-- Column 2: Backlog de Implementação -->
+                <div class="flex flex-col h-full rounded-2xl glass border-slate-800/60 p-4 min-h-[500px]">
+                    <div class="flex items-center justify-between pb-3 mb-4 border-b border-white/5">
+                        <div class="flex items-center space-x-2">
+                            <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
+                            <h3 class="font-outfit font-bold text-slate-200">Backlog</h3>
+                        </div>
+                        <span id="count-backlog" class="text-xs bg-amber-950/40 px-2.5 py-1 rounded-full font-bold text-amber-400 border border-amber-500/10">0</span>
+                    </div>
+                    <div id="col-backlog" class="flex flex-col gap-4 flex-grow" ondragover="allowDrop(event)" ondrop="drop(event, 'Backlog de Implementação')">
+                        <!-- Cards injected via JS -->
+                    </div>
+                </div>
+
+                <!-- Column 3: Em Andamento -->
+                <div class="flex flex-col h-full rounded-2xl glass border-slate-800/60 p-4 min-h-[500px]">
+                    <div class="flex items-center justify-between pb-3 mb-4 border-b border-white/5">
+                        <div class="flex items-center space-x-2">
+                            <span class="h-2.5 w-2.5 rounded-full bg-accent-purple"></span>
+                            <h3 class="font-outfit font-bold text-slate-200">Em Andamento</h3>
+                        </div>
+                        <span id="count-andamento" class="text-xs bg-purple-950/40 px-2.5 py-1 rounded-full font-bold text-accent-purple border border-accent-purple/10">0</span>
+                    </div>
+                    <div id="col-andamento" class="flex flex-col gap-4 flex-grow" ondragover="allowDrop(event)" ondrop="drop(event, 'Em Andamento')">
+                        <!-- Cards injected via JS -->
+                    </div>
+                </div>
+
+                <!-- Column 4: Concluído -->
+                <div class="flex flex-col h-full rounded-2xl glass border-slate-800/60 p-4 min-h-[500px]">
+                    <div class="flex items-center justify-between pb-3 mb-4 border-b border-white/5">
+                        <div class="flex items-center space-x-2">
+                            <span class="h-2.5 w-2.5 rounded-full bg-accent-emerald"></span>
+                            <h3 class="font-outfit font-bold text-slate-200">Concluídos</h3>
+                        </div>
+                        <span id="count-concluido" class="text-xs bg-emerald-950/40 px-2.5 py-1 rounded-full font-bold text-accent-emerald border border-accent-emerald/10">0</span>
+                    </div>
+                    <div id="col-concluido" class="flex flex-col gap-4 flex-grow" ondragover="allowDrop(event)" ondrop="drop(event, 'Concluído')">
+                        <!-- Cards injected via JS -->
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- SECTION 2: ESTEIRA DE SOLICITAÇÕES (NOVO) -->
+        <section id="view-solicitacoes" class="space-y-6 hidden">
+            <div class="glass rounded-2xl p-6 border border-white/5 shadow-xl">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="font-outfit font-extrabold text-2xl text-white">Esteira de Solicitações</h2>
+                        <p class="text-xs text-slate-400 mt-1">Acompanhe e faça a triagem de novos chamados e serviços locais</p>
+                    </div>
+                    <button onclick="openRequestModal()" class="flex items-center space-x-1.5 text-xs font-bold px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-accent-purple hover:opacity-90 rounded-xl shadow shadow-indigo-500/10 transition">
+                        <i data-lucide="plus-circle" class="h-4 w-4"></i> Novo Pedido
+                    </button>
+                </div>
+                
+                <!-- Grid of service requests -->
+                <div id="solicitacoes-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Injected dynamically via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: CONTROLE ADMINISTRATIVO DE USUÁRIOS (NOVO) -->
+        <section id="view-admin-panel" class="space-y-6 hidden">
+            <div class="glass rounded-2xl p-6 border border-white/5 shadow-xl">
+                <div class="mb-6">
+                    <h2 class="font-outfit font-extrabold text-2xl text-white">Gerenciamento de Acesso (RBAC)</h2>
+                    <p class="text-xs text-slate-400 mt-1">Administre permissões de usuários e configure acessos granulares por cidades/filiais</p>
+                </div>
+                
+                <div class="overflow-x-auto rounded-xl border border-white/5 bg-slate-900/30">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-white/10 bg-slate-950/40 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                <th class="px-6 py-4">Nome do Usuário</th>
+                                <th class="px-6 py-4">Nível de Perfil</th>
+                                <th class="px-6 py-4">Filiais Vinculadas</th>
+                                <th class="px-6 py-4 text-right">Controle</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-list" class="divide-y divide-white/5 text-sm text-slate-300">
+                            <!-- Injected dynamically via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Central de Senhas e Acessos Técnicos (Administrador) -->
+            <div class="glass rounded-2xl p-6 border border-white/5 shadow-xl mt-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="font-outfit font-extrabold text-2xl text-white flex items-center gap-2">
+                            <i data-lucide="key-round" class="h-6 w-6 text-accent-fuchsia"></i>
+                            Central de Senhas e Acessos Técnicos
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">Visão unificada de todas as credenciais de filiais e senhas de equipamentos do inventário</p>
+                    </div>
+                    
+                    <!-- Search input -->
+                    <div class="relative w-full sm:w-80">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="search" class="h-4 w-4"></i>
+                        </span>
+                        <input type="text" id="admin-pwd-search" oninput="filterAdminPasswords()" placeholder="Filtrar por equipamento, local, usuário..." class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-accent-fuchsia transition duration-250">
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto rounded-xl border border-white/5 bg-slate-900/30">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-white/10 bg-slate-950/40 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                <th class="px-6 py-4">Tipo / Categoria</th>
+                                <th class="px-6 py-4">Equipamento / Identificador</th>
+                                <th class="px-6 py-4">Local de Instalação</th>
+                                <th class="px-6 py-4">Usuário</th>
+                                <th class="px-6 py-4">Senha</th>
+                                <th class="px-6 py-4">Origem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-passwords-list" class="divide-y divide-white/5 text-sm text-slate-300">
+                            <!-- Injetado dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: INVENTÁRIO GLOBAL DE ATIVOS (NOVO) -->
+        <section id="view-inventario" class="space-y-6 hidden">
+            <!-- Header & Stats -->
+            <div class="glass rounded-2xl p-6 border border-white/5 shadow-xl">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="font-outfit font-extrabold text-2xl text-white">Inventário Global de Ativos</h2>
+                        <p class="text-xs text-slate-400 mt-1">Gerencie equipamentos de hardware, tags de patrimônio, marcas, modelos e distribuições pelas filiais</p>
+                    </div>
+                    <button id="btn-create-hardware" onclick="openHardwareAssetModal()" class="hidden flex items-center space-x-1.5 text-xs font-bold px-4 py-2.5 bg-gradient-to-r from-accent-purple to-accent-fuchsia hover:opacity-90 rounded-xl shadow shadow-accent-purple/10 transition">
+                        <i data-lucide="plus-circle" class="h-4 w-4"></i> Novo Equipamento
+                    </button>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div class="glass rounded-xl p-3 border border-white/5 text-center">
+                        <span class="block text-[10px] text-slate-400 uppercase font-semibold">Total de Ativos</span>
+                        <span id="inv-stat-total" class="font-outfit font-bold text-lg text-white">0</span>
+                    </div>
+                    <div class="glass rounded-xl p-3 border border-white/5 text-center">
+                        <span class="block text-[10px] text-slate-400 uppercase font-semibold text-emerald-400">Disponíveis</span>
+                        <span id="inv-stat-disponivel" class="font-outfit font-bold text-lg text-emerald-400">0</span>
+                    </div>
+                    <div class="glass rounded-xl p-3 border border-white/5 text-center">
+                        <span class="block text-[10px] text-slate-400 uppercase font-semibold text-accent-purple">Em Uso</span>
+                        <span id="inv-stat-uso" class="font-outfit font-bold text-lg text-accent-purple">0</span>
+                    </div>
+                    <div class="glass rounded-xl p-3 border border-white/5 text-center">
+                        <span class="block text-[10px] text-slate-400 uppercase font-semibold text-amber-400">Manutenção</span>
+                        <span id="inv-stat-manutencao" class="font-outfit font-bold text-lg text-amber-400">0</span>
+                    </div>
+                    <div class="glass rounded-xl p-3 border border-white/5 text-center">
+                        <span class="block text-[10px] text-slate-400 uppercase font-semibold text-rose-400">Sucata</span>
+                        <span id="inv-stat-sucata" class="font-outfit font-bold text-lg text-rose-400">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search and Filter Bar -->
+            <div class="glass rounded-2xl p-4 lg:p-6 border border-white/5 shadow-xl">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Real-time search -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="search" class="h-4 w-4"></i>
+                        </span>
+                        <input type="text" id="inv-filter-search" oninput="applyInventoryFilters()" placeholder="Buscar Série, Marca, Tag..." class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-accent-purple transition duration-250">
+                    </div>
+
+                    <!-- Category filter -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="tag" class="h-4 w-4"></i>
+                        </span>
+                        <select id="inv-filter-categoria" onchange="applyInventoryFilters()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple transition duration-250 appearance-none">
+                            <option value="">Categoria: Todas</option>
+                            <option value="Computador">Computador</option>
+                            <option value="Monitor">Monitor</option>
+                            <option value="Impressora">Impressora</option>
+                            <option value="Câmera/DVR">Câmera/DVR</option>
+                            <option value="Switch/Roteador">Switch/Roteador</option>
+                            <option value="Periféricos">Periféricos</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                    </div>
+
+                    <!-- Status filter -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="info" class="h-4 w-4"></i>
+                        </span>
+                        <select id="inv-filter-status" onchange="applyInventoryFilters()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple transition duration-250 appearance-none">
+                            <option value="">Status: Todos</option>
+                            <option value="Disponível">Disponível</option>
+                            <option value="Em Uso">Em Uso</option>
+                            <option value="Manutenção">Manutenção</option>
+                            <option value="Sucata">Sucata</option>
+                        </select>
+                    </div>
+
+                    <!-- Localização filter -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="building" class="h-4 w-4"></i>
+                        </span>
+                        <select id="inv-filter-filial" onchange="applyInventoryFilters()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple transition duration-250 appearance-none">
+                            <option value="">Localização: Todas</option>
+                            <option value="central">Estoque Central</option>
+                            <!-- Populado dinamicamente -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hardware Assets List -->
+            <div id="inv-assets-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Injected dynamically via JS -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal: Settings (Firebase Connection) -->
+    <div id="modal-settings" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+        <div class="w-full max-w-md glass border-white/10 rounded-2xl p-6 shadow-2xl relative">
+            <button onclick="closeSettingsModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2.5 rounded-lg bg-accent-purple/20 text-accent-purple">
+                    <i data-lucide="database" class="h-6 w-6"></i>
+                </div>
+                <div>
+                    <h3 class="font-outfit font-bold text-lg text-white">Configurar Firebase</h3>
+                    <p class="text-xs text-slate-400">Autenticação, Banco de Dados & Storage</p>
+                </div>
+            </div>
+            
+            <div class="space-y-3 overflow-y-auto max-h-[60vh] pr-1">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1">API Key *</label>
+                    <input type="text" id="fb-api-key" placeholder="AIzaSy..." class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-accent-purple">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1">Auth Domain *</label>
+                    <input type="text" id="fb-auth-domain" placeholder="project-id.firebaseapp.com" class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-accent-purple">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1">Project ID *</label>
+                    <input type="text" id="fb-project-id" placeholder="project-id" class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-accent-purple">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1">Storage Bucket *</label>
+                    <input type="text" id="fb-storage-bucket" placeholder="project-id.appspot.com" class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-accent-purple">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1">Messaging Sender ID</label>
+                    <input type="text" id="fb-messaging-sender-id" placeholder="1234567890" class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-accent-purple">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1">App ID *</label>
+                    <input type="text" id="fb-app-id" placeholder="1:1234567890:web:abcdef..." class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-accent-purple">
+                </div>
+                
+                <div class="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] rounded-xl flex gap-2">
+                    <i data-lucide="shield-alert" class="h-4.5 w-4.5 flex-shrink-0"></i>
+                    <p>Chaves salvas localmente no `localStorage` do seu navegador de forma segura.</p>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button onclick="disconnectFirebase()" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition duration-200">
+                        Desconectar e Limpar
+                    </button>
+                    <button onclick="saveFirebaseSettings()" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-accent-purple hover:bg-opacity-95 text-white transition duration-200">
+                        Salvar e Conectar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Criar/Editar Projeto -->
+    <div id="modal-project" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+        <div class="w-full max-w-xl glass border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+            <button onclick="closeProjectModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+            <div class="flex items-center space-x-3 mb-6">
+                <div class="p-2.5 rounded-lg bg-accent-fuchsia/20 text-accent-fuchsia">
+                    <i data-lucide="folder-plus" class="h-6 w-6"></i>
+                </div>
+                <div>
+                    <h3 id="modal-project-title" class="font-outfit font-bold text-lg text-white">Cadastrar Demanda</h3>
+                    <p class="text-xs text-slate-400">Implementação de novas ideias nos pontos de operação</p>
+                </div>
+            </div>
+            
+            <form id="project-form" onsubmit="handleProjectSubmit(event)" class="space-y-4">
+                <input type="hidden" id="proj-id">
+                
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Título do Projeto *</label>
+                    <input type="text" id="proj-titulo" required placeholder="Ex: Substituição de Iluminação para LED" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Filial Destino *</label>
+                        <select id="proj-filial" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                            <option value="">Selecione a Filial...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Nível de Urgência *</label>
+                        <select id="proj-urgencia" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                            <option value="Baixa">Baixa</option>
+                            <option value="Média">Média</option>
+                            <option value="Alta">Alta</option>
+                            <option value="Crítica">Crítica</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Designar Responsável</label>
+                        <select id="proj-designado" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                            <!-- Populado via JS -->
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Status Inicial *</label>
+                        <select id="proj-status" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                            <option value="Banco de Ideias">Banco de Ideias</option>
+                            <option value="Backlog de Implementação">Backlog de Implementação</option>
+                            <option value="Em Andamento">Em Andamento</option>
+                            <option value="Concluído">Concluído</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Anexar Foto / Imagem</label>
+                        <div class="relative flex items-center">
+                            <input type="file" id="proj-foto" accept="image/*" class="hidden" onchange="updateFileLabel()">
+                            <label for="proj-foto" class="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 cursor-pointer text-slate-300 text-sm transition">
+                                <i data-lucide="image" class="h-4 w-4"></i>
+                                <span id="file-label">Selecionar Imagem</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BLOQUEIO SOS SECTION -->
+                <div class="p-4 bg-rose-950/15 border border-rose-500/10 rounded-2xl space-y-3">
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="proj-bloqueado" onchange="toggleMotivoField()" class="h-4 w-4 rounded border-slate-800 text-rose-500 bg-slate-900 focus:ring-rose-500 focus:ring-offset-slate-950">
+                        <label for="proj-bloqueado" class="text-xs font-bold text-rose-400 uppercase tracking-wider cursor-pointer flex items-center gap-1.5 select-none">
+                            <i data-lucide="alert-octagon" class="h-4 w-4 text-rose-500 animate-pulse"></i>
+                            S.O.S - Declarar Impedimento / Bloqueio
+                        </label>
+                    </div>
+                    <div id="proj-container-motivo" class="hidden">
+                        <label class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Motivo do Impedimento *</label>
+                        <textarea id="proj-motivo" rows="2" placeholder="Explique o motivo para travar a execução e disparar um alerta SOS imediato no Telegram..." class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-rose-500"></textarea>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Descrição do Projeto</label>
+                    <textarea id="proj-descricao" rows="3" placeholder="Detalhes técnicos sobre a implementação, prazos esperados, etc..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-white/5">
+                    <button type="button" onclick="closeProjectModal()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition duration-200">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-accent-purple to-accent-fuchsia hover:opacity-90 text-white transition duration-200">
+                        Salvar Projeto
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Criar Filial -->
+    <div id="modal-filial" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+        <div class="w-full max-w-md glass border-white/10 rounded-2xl p-6 shadow-2xl relative">
+            <button onclick="closeFilialModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+            <div class="flex items-center space-x-3 mb-6">
+                <div class="p-2.5 rounded-lg bg-accent-emerald/20 text-accent-emerald">
+                    <i data-lucide="building" class="h-6 w-6"></i>
+                </div>
+                <div>
+                    <h3 class="font-outfit font-bold text-lg text-white">Cadastrar Filial</h3>
+                    <p class="text-xs text-slate-400">Ponto de operação ou filial da empresa</p>
+                </div>
+            </div>
+            
+            <form id="filial-form" onsubmit="handleFilialSubmit(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Nome da Empresa / Filial *</label>
+                    <input type="text" id="fil-nome" required placeholder="Ex: Filial Sul" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                </div>
+
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Cidade *</label>
+                        <input type="text" id="fil-cidade" required placeholder="Ex: Curitiba" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Estado (UF) *</label>
+                        <input type="text" id="fil-estado" required maxlength="2" placeholder="PR" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple text-center uppercase">
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-white/5">
+                    <button type="button" onclick="closeFilialModal()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition duration-200">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-accent-emerald hover:bg-opacity-90 text-white transition duration-200">
+                        Salvar Filial
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Detalhes do Projeto -->
+    <div id="modal-details" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+        <div class="w-full max-w-xl glass border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+            <button onclick="closeDetailsModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+            
+            <div id="details-header" class="mb-4">
+                <!-- Status & Urgência Badges -->
+                <div class="flex items-center gap-2 mb-2">
+                    <span id="details-badge-status" class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border"></span>
+                    <span id="details-badge-urgencia" class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border"></span>
+                </div>
+                <h3 id="details-titulo" class="font-outfit font-extrabold text-2xl text-white"></h3>
+                <p id="details-filial" class="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                    <i data-lucide="building" class="h-3.5 w-3.5 text-accent-purple"></i>
+                    <span id="details-filial-link" class="text-accent-purple font-semibold hover:underline cursor-pointer"></span>
+                </p>
+            </div>
+
+            <div class="space-y-4">
+                <!-- SOS ALERT DETAILS -->
+                <div id="details-alert-blocked" class="hidden p-3.5 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs rounded-xl flex flex-col gap-2 shadow-lg shadow-rose-950/20">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="alert-octagon" class="h-5 w-5 text-rose-500 flex-shrink-0 animate-bounce"></i>
+                        <p class="font-bold uppercase tracking-wider">🚨 IMPEDIMENTO DECLARADO (SOS)</p>
+                    </div>
+                    <p id="details-motivo-bloqueio" class="italic pl-7 border-l border-rose-500/20 font-medium"></p>
+                </div>
+
+                <!-- Stagnant Alert -->
+                <div id="details-alert-stagnant" class="hidden p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl flex items-center gap-2 animate-pulse">
+                    <i data-lucide="alert-circle" class="h-5 w-5 flex-shrink-0"></i>
+                    <p><b>Atenção:</b> Este projeto está em andamento há mais de 24 horas sem sofrer atualizações!</p>
+                </div>
+
+                <!-- Foto do Projeto -->
+                <div id="details-container-foto" class="hidden w-full overflow-hidden rounded-xl border border-white/5 max-h-[260px] bg-slate-900/50 flex items-center justify-center">
+                    <img id="details-foto" src="" alt="Foto do projeto" class="w-full h-full object-cover">
+                </div>
+
+                <!-- Descrição -->
+                <div>
+                    <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Descrição</h4>
+                    <p id="details-descricao" class="text-sm text-slate-200 whitespace-pre-line leading-relaxed glass border-white/5 p-4 rounded-xl"></p>
+                </div>
+
+                <!-- Timestamps -->
+                <div class="grid grid-cols-2 gap-4 text-[11px] text-slate-400 bg-slate-900/40 p-3 rounded-xl border border-white/5">
+                    <div>
+                        <span class="block font-medium">Criado em</span>
+                        <span id="details-created-at" class="text-slate-300"></span>
+                    </div>
+                    <div>
+                        <span class="block font-medium">Última atualização</span>
+                        <span id="details-updated-at" class="text-slate-300"></span>
+                    </div>
+                </div>
+
+                <!-- ABA DE COMENTÁRIOS & ATUALIZAÇÕES -->
+                <div class="mt-6 pt-6 border-t border-white/5">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <i data-lucide="message-square" class="h-4 w-4 text-accent-purple"></i>
+                        <span>Comentários & Histórico</span>
+                    </h4>
+                    
+                    <!-- Lista de Comentários -->
+                    <div id="details-comments-list" class="space-y-3 max-h-48 overflow-y-auto mb-4 pr-1">
+                        <!-- Injetado dinamicamente -->
+                    </div>
+                    
+                    <!-- Formulário de Comentário -->
+                    <form id="comment-form" onsubmit="handleCommentSubmit(event)" class="space-y-3 bg-slate-900/50 p-3 rounded-xl border border-white/5">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <input type="text" id="comment-autor" required placeholder="Seu Nome" class="col-span-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-accent-purple">
+                            <input type="text" id="comment-texto" required placeholder="Escreva uma nova atualização..." class="col-span-1 sm:col-span-2 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-accent-purple">
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="flex items-center space-x-1 px-3 py-1.5 bg-accent-purple hover:bg-opacity-95 text-white text-xs font-bold rounded-lg transition duration-200">
+                                <i data-lucide="send" class="h-3.5 w-3.5"></i>
+                                <span>Adicionar</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Control actions -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-white/5">
+                    <div class="flex gap-2">
+                        <button id="details-btn-edit" class="flex items-center space-x-1 text-xs font-semibold px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition duration-200 text-slate-200">
+                            <i data-lucide="edit-3" class="h-4 w-4"></i>
+                            <span>Editar</span>
+                        </button>
+                        <button id="details-btn-share" class="flex items-center space-x-1 text-xs font-semibold px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition duration-200 text-slate-200">
+                            <i data-lucide="link" class="h-4 w-4"></i>
+                            <span>Copiar Link</span>
+                        </button>
+                        <button id="details-btn-delete" class="flex items-center space-x-1 text-xs font-semibold px-3 py-2 bg-rose-950/40 hover:bg-rose-900/30 border border-rose-500/20 rounded-xl transition duration-200 text-rose-400">
+                            <i data-lucide="trash-2" class="h-4 w-4"></i>
+                            <span>Excluir</span>
+                        </button>
+                    </div>
+
+                    <!-- Mover status -->
+                    <div id="details-mover-container" class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
+                        <span class="text-[10px] uppercase font-bold text-slate-500 px-2">Mover:</span>
+                        <button onclick="moveCurrentProject('Banco de Ideias')" class="text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white font-medium transition duration-150">Ideia</button>
+                        <button onclick="moveCurrentProject('Backlog de Implementação')" class="text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white font-medium transition duration-150">Backlog</button>
+                        <button onclick="moveCurrentProject('Em Andamento')" class="text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white font-medium transition duration-150">Foco</button>
+                        <button onclick="moveCurrentProject('Concluído')" class="text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white font-medium transition duration-150">Fim</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: NOVA SOLICITAÇÃO DE SERVIÇO (NOVO) -->
+    <div id="modal-request" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+        <div class="w-full max-w-lg glass border-white/10 rounded-2xl p-6 shadow-2xl relative">
+            <button onclick="closeRequestModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+            <div class="flex items-center space-x-3 mb-6">
+                <div class="p-2.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+                    <i data-lucide="ticket" class="h-6 w-6"></i>
+                </div>
+                <div>
+                    <h3 class="font-outfit font-bold text-lg text-white">Solicitar Novo Serviço</h3>
+                    <p class="text-xs text-slate-400">Abra um pedido de melhoria para triagem do Administrador</p>
+                </div>
+            </div>
+            
+            <form id="request-form" onsubmit="handleRequestSubmit(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Título do Pedido *</label>
+                    <input type="text" id="req-titulo" required placeholder="Ex: Goteira no ar condicionado central" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Filial Destino *</label>
+                        <select id="req-filial" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 appearance-none">
+                            <!-- Populado via JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Urgência Sugerida *</label>
+                        <select id="req-urgencia" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 appearance-none">
+                            <option value="Baixa">Baixa</option>
+                            <option value="Média">Média</option>
+                            <option value="Alta">Alta</option>
+                            <option value="Crítica">Crítica</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Designar Responsável</label>
+                        <select id="req-designado" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 appearance-none">
+                            <!-- Populado via JS -->
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Anexar Foto de Evidência</label>
+                    <div class="relative flex items-center">
+                        <input type="file" id="req-foto" accept="image/*" class="hidden" onchange="updateRequestFileLabel()">
+                        <label for="req-foto" class="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 cursor-pointer text-slate-300 text-sm transition">
+                            <i data-lucide="image" class="h-4 w-4"></i>
+                            <span id="req-file-label">Selecionar Foto</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Descrição do Problema *</label>
+                    <textarea id="req-descricao" required rows="3" placeholder="Detalhes técnicos, localização exata ou outras instruções necessárias..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-white/5">
+                    <button type="button" onclick="closeRequestModal()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-indigo-500 hover:bg-indigo-600 text-white transition">
+                        Enviar Solicitação
+                    </button>
+                </div>
+            </form>
+         </div>
+     </div>
+
+     <!-- MODAL: REJEITAR SOLICITAÇÃO (NOVO) -->
+     <div id="modal-reject" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+         <div class="w-full max-w-md glass border-white/10 rounded-2xl p-6 shadow-2xl relative">
+             <button onclick="closeRejectModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                 <i data-lucide="x" class="h-5 w-5"></i>
+             </button>
+             <div class="flex items-center space-x-3 mb-6">
+                 <div class="p-2.5 rounded-lg bg-rose-500/20 text-rose-400">
+                     <i data-lucide="x-circle" class="h-6 w-6"></i>
+                 </div>
+                 <div>
+                     <h3 class="font-outfit font-bold text-lg text-white">Rejeitar Solicitação</h3>
+                     <p class="text-xs text-slate-400">Arquivar o pedido com justificativa técnica</p>
+                 </div>
+             </div>
+             
+             <form id="reject-form" onsubmit="handleRejectSubmit(event)" class="space-y-4">
+                 <input type="hidden" id="reject-req-id">
+                 <div>
+                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Justificativa da Rejeição *</label>
+                     <textarea id="reject-justificativa" required rows="3" placeholder="Insira o motivo detalhado pelo qual este pedido foi rejeitado..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-rose-500"></textarea>
+                 </div>
+
+                 <div class="flex justify-end gap-3 pt-4 border-t border-white/5">
+                     <button type="button" onclick="closeRejectModal()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition">
+                         Cancelar
+                     </button>
+                     <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition">
+                         Confirmar Rejeição
+                     </button>
+                 </div>
+             </form>
+         </div>
+     </div>
+
+     <!-- MODAL: PERMISSÕES E VÍNCULO DE FILIAIS (NOVO) -->
+     <div id="modal-permissions" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+         <div class="w-full max-w-md glass border-white/10 rounded-2xl p-6 shadow-2xl relative">
+             <button onclick="closePermissionsModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                 <i data-lucide="x" class="h-5 w-5"></i>
+             </button>
+             <div class="flex items-center space-x-3 mb-6">
+                 <div class="p-2.5 rounded-lg bg-accent-purple/20 text-accent-purple">
+                     <i data-lucide="shield" class="h-6 w-6"></i>
+                 </div>
+                 <div>
+                     <h3 id="permissions-user-name" class="font-outfit font-bold text-lg text-white">Editar Permissões</h3>
+                     <p class="text-xs text-slate-400">Configure nível e mapeamento granular de filiais</p>
+                 </div>
+             </div>
+             
+             <form id="permissions-form" onsubmit="handlePermissionsSubmit(event)" class="space-y-4">
+                 <input type="hidden" id="permissions-user-id">
+                 
+                 <div>
+                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Perfil de Usuário *</label>
+                     <select id="permissions-role" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                         <option value="Administrador">Administrador</option>
+                         <option value="Colaborador">Colaborador</option>
+                     </select>
+                 </div>
+
+                 <div>
+                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-2.5">Filiais Autorizadas (Para Colaboradores)</label>
+                     <div id="permissions-filiais-list" class="space-y-2 max-h-48 overflow-y-auto p-3 rounded-xl bg-slate-900 border border-slate-800">
+                         <!-- Injetado checkboxes dinamicamente -->
+                     </div>
+                 </div>
+
+                 <div class="flex justify-end gap-3 pt-4 border-t border-white/5">
+                     <button type="button" onclick="closePermissionsModal()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition">
+                         Cancelar
+                     </button>
+                     <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-accent-purple hover:bg-opacity-95 text-white transition">
+                         Salvar Permissões
+                     </button>
+                 </div>
+             </form>
+         </div>
+     </div>
+
+     <!-- MODAL: PAINEL DA FILIAL (OPERACIONAL & ACESSOS) -->
+     <div id="modal-filial-panel" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+         <div class="w-full max-w-5xl glass border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+             <button onclick="closeFilialPanelModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                 <i data-lucide="x" class="h-5 w-5"></i>
+             </button>
+             
+             <div class="flex items-center space-x-3 mb-6">
+                 <div class="h-12 w-12 rounded-xl bg-gradient-to-tr from-accent-purple to-accent-fuchsia flex items-center justify-center shadow-lg shadow-accent-purple/20">
+                     <i data-lucide="building" class="h-6 w-6 text-white animate-pulse"></i>
+                 </div>
+                 <div>
+                     <h3 id="filial-panel-title" class="font-outfit font-extrabold text-2xl text-white">Painel da Filial</h3>
+                     <p id="filial-panel-location" class="text-xs text-slate-400 font-medium tracking-wide uppercase flex items-center gap-1">
+                         <i data-lucide="map-pin" class="h-3 w-3"></i> <span></span>
+                     </p>
+                 </div>
+             </div>
+
+             <!-- Abas Internas -->
+             <div class="flex border-b border-white/5 mb-6 overflow-x-auto gap-2">
+                 <button onclick="switchFilialPanelTab('credenciais')" id="tab-filial-credenciais" class="flex items-center gap-2 px-4 py-2 text-sm font-bold border-b-2 border-accent-purple text-accent-purple">
+                     <i data-lucide="key" class="h-4 w-4"></i> Inventário e Acessos
+                 </button>
+                 <button onclick="switchFilialPanelTab('hardware')" id="tab-filial-hardware" class="flex items-center gap-2 px-4 py-2 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-white transition duration-200">
+                     <i data-lucide="monitor" class="h-4 w-4"></i> Ativos de Hardware
+                 </button>
+             </div>
+
+             <!-- ABA 1: CREDENCIAIS E IPS -->
+             <div id="content-filial-credenciais" class="space-y-6">
+                 <div class="flex flex-wrap items-center justify-between gap-4 bg-slate-900/40 p-4 rounded-xl border border-white/5">
+                     <div class="flex gap-2">
+                         <button id="btn-add-credential" onclick="openCredentialModal()" class="flex items-center space-x-1.5 text-xs font-bold px-3 py-2 bg-accent-purple hover:bg-opacity-95 text-white rounded-xl shadow transition">
+                             <i data-lucide="plus" class="h-4 w-4"></i>
+                             <span>Nova Credencial</span>
+                         </button>
+                     </div>
+                     <!-- Exportação Admin -->
+                     <div id="admin-export-controls" class="flex gap-2 hidden">
+                         <button onclick="exportTechnicalData('csv')" class="flex items-center space-x-1.5 text-xs font-bold px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl transition">
+                             <i data-lucide="file-spreadsheet" class="h-4 w-4"></i>
+                             <span>Exportar CSV</span>
+                         </button>
+                         <button onclick="exportTechnicalData('pdf')" class="flex items-center space-x-1.5 text-xs font-bold px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl transition">
+                             <i data-lucide="printer" class="h-4 w-4"></i>
+                             <span>Exportar PDF</span>
+                         </button>
+                     </div>
+                 </div>
+
+                 <!-- Tabela -->
+                 <div class="overflow-x-auto rounded-xl border border-white/5 bg-slate-900/30">
+                     <table class="w-full text-left border-collapse">
+                         <thead>
+                             <tr class="border-b border-white/10 bg-slate-950/40 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                 <th class="px-4 py-3">Tipo</th>
+                                 <th class="px-4 py-3">Identificador</th>
+                                 <th class="px-4 py-3">IP Local</th>
+                                 <th class="px-4 py-3">IP Público</th>
+                                 <th class="px-4 py-3">Usuário</th>
+                                 <th class="px-4 py-3">Senha</th>
+                                 <th class="px-4 py-3">Observações</th>
+                                 <th class="px-4 py-3 text-right">Ações</th>
+                             </tr>
+                         </thead>
+                         <tbody id="filial-credenciais-list" class="divide-y divide-white/5 text-xs text-slate-300">
+                             <!-- Injetado dinamicamente -->
+                         </tbody>
+                     </table>
+                 </div>
+             </div>
+
+             <!-- ABA 2: HARDWARE LOCAL -->
+             <div id="content-filial-hardware" class="space-y-6 hidden">
+                 <!-- Vincular Ativo -->
+                 <div class="glass p-4 rounded-xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                     <div>
+                         <h4 class="font-outfit font-bold text-slate-200">Vincular Ativo ao Local</h4>
+                         <p class="text-xs text-slate-400">Associe equipamentos livres do estoque central para este ponto de operação.</p>
+                     </div>
+                     <div class="flex flex-grow md:flex-none gap-2 items-center">
+                         <select id="filial-link-asset-dropdown" class="px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-accent-purple min-w-[220px]">
+                             <option value="">Selecione um ativo...</option>
+                         </select>
+                         <button onclick="linkAssetToFilial()" class="flex items-center space-x-1.5 text-xs font-bold px-4 py-2.5 bg-accent-emerald hover:bg-opacity-90 text-white rounded-xl shadow transition">
+                             <i data-lucide="check" class="h-4 w-4"></i>
+                             <span>Vincular</span>
+                         </button>
+                     </div>
+                 </div>
+
+                 <!-- Grid de ativos alocados -->
+                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6" id="filial-hardware-list">
+                     <!-- Injetado dinamicamente -->
+                 </div>
+             </div>
+         </div>
+     </div>
+
+     <!-- MODAL: CADASTRAR/EDITAR CREDENCIAL -->
+     <div id="modal-credential" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+         <div class="w-full max-w-md glass border-white/10 rounded-2xl p-6 shadow-2xl relative">
+             <button onclick="closeCredentialModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                 <i data-lucide="x" class="h-5 w-5"></i>
+             </button>
+             <div class="flex items-center space-x-3 mb-6">
+                 <div class="p-2.5 rounded-lg bg-accent-purple/20 text-accent-purple">
+                     <i data-lucide="key" class="h-6 w-6"></i>
+                 </div>
+                 <div>
+                     <h3 id="modal-credential-title" class="font-outfit font-bold text-lg text-white">Adicionar Credencial</h3>
+                     <p class="text-xs text-slate-400">Configure as credenciais e IPs técnicos do ativo</p>
+                 </div>
+             </div>
+             
+             <form id="credential-form" onsubmit="handleCredentialSubmit(event)" class="space-y-4">
+                 <input type="hidden" id="cred-id">
+                 <input type="hidden" id="cred-filial-id">
+                 
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Tipo de Ativo *</label>
+                         <select id="cred-tipo" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                             <option value="Computador">Computador</option>
+                             <option value="Servidor">Servidor</option>
+                             <option value="DVR/Câmeras">DVR/Câmeras</option>
+                             <option value="Equipamento de Rede">Equipamento de Rede</option>
+                             <option value="Conta de E-mail">Conta de E-mail</option>
+                             <option value="Outros">Outros</option>
+                         </select>
+                     </div>
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Nome Identificador *</label>
+                         <input type="text" id="cred-nome" required placeholder="Ex: Roteador Principal" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                 </div>
+
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">IP Local</label>
+                         <input type="text" id="cred-ip-local" placeholder="Ex: 192.168.1.1" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">IP Público</label>
+                         <input type="text" id="cred-ip-publico" placeholder="Ex: 200.150.80.90" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                 </div>
+
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Usuário de Acesso</label>
+                         <input type="text" id="cred-usuario" placeholder="Ex: admin" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Senha de Acesso *</label>
+                         <input type="password" id="cred-senha" required placeholder="Sua senha secreta..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                 </div>
+
+                 <div>
+                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Observações Adicionais</label>
+                     <textarea id="cred-observacoes" rows="2.5" placeholder="Instruções de porta, horários de acesso ou notas técnicas..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple"></textarea>
+                 </div>
+
+                 <div class="flex justify-end gap-3 pt-4 border-t border-white/5">
+                     <button type="button" onclick="closeCredentialModal()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition">
+                         Cancelar
+                     </button>
+                     <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-accent-purple hover:bg-opacity-95 text-white transition">
+                         Salvar Credencial
+                     </button>
+                 </div>
+             </form>
+         </div>
+     </div>
+
+     <!-- MODAL: CADASTRAR/EDITAR ATIVO GLOBAL (HARDWARE) -->
+     <div id="modal-hardware" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+         <div class="w-full max-w-xl glass border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+             <button onclick="closeHardwareAssetModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                 <i data-lucide="x" class="h-5 w-5"></i>
+             </button>
+             <div class="flex items-center space-x-3 mb-6">
+                 <div class="p-2.5 rounded-lg bg-accent-fuchsia/20 text-accent-fuchsia">
+                     <i data-lucide="monitor" class="h-6 w-6"></i>
+                 </div>
+                 <div>
+                     <h3 id="modal-hardware-title" class="font-outfit font-bold text-lg text-white">Cadastrar Ativo de Hardware</h3>
+                     <p class="text-xs text-slate-400">Registre equipamentos corporativos e tags de patrimônio</p>
+                 </div>
+             </div>
+             
+             <form id="hardware-form" onsubmit="handleHardwareSubmit(event)" class="space-y-4">
+                 <input type="hidden" id="hard-id">
+                 
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Código de Patrimônio / Tag *</label>
+                         <input type="text" id="hard-tag" required placeholder="Ex: PAT-02391" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Categoria *</label>
+                         <select id="hard-categoria" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                             <option value="Computador">Computador</option>
+                             <option value="Monitor">Monitor</option>
+                             <option value="Impressora">Impressora</option>
+                             <option value="Câmera/DVR">Câmera/DVR</option>
+                             <option value="Switch/Roteador">Switch/Roteador</option>
+                             <option value="Periféricos">Periféricos</option>
+                             <option value="Outros">Outros</option>
+                         </select>
+                     </div>
+                 </div>
+
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Marca & Modelo *</label>
+                         <input type="text" id="hard-marca-modelo" required placeholder="Ex: Dell Optiplex 7090" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Número de Série</label>
+                         <input type="text" id="hard-serial" placeholder="Ex: 8XJ1D90" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                 </div>
+
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Status Inicial *</label>
+                         <select id="hard-status" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                             <option value="Disponível">Disponível (Estoque Central)</option>
+                             <option value="Em Uso">Em Uso</option>
+                             <option value="Manutenção">Manutenção</option>
+                             <option value="Sucata">Sucata</option>
+                         </select>
+                     </div>
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Filial Atual</label>
+                         <select id="hard-filial" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                             <option value="">Estoque Central (Livre)</option>
+                             <!-- Populado via JS -->
+                         </select>
+                     </div>
+                 </div>
+
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Data de Aquisição</label>
+                         <input type="date" id="hard-data-aquisicao" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Valor Estimado (R$)</label>
+                         <input type="number" step="0.01" min="0" id="hard-valor" placeholder="Ex: 3500.00" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                 </div>
+
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Login / Usuário</label>
+                         <input type="text" id="hard-login" placeholder="Ex: admin..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                     <div>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Senha do Equipamento</label>
+                         <input type="password" id="hard-senha" placeholder="Senha de acesso..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                     </div>
+                 </div>
+
+                 <div class="mt-2 text-right">
+                     <p class="text-[11px] text-slate-400 leading-tight">
+                         <i data-lucide="shield" class="inline h-3.5 w-3.5 text-accent-purple mr-1"></i> Apenas Admins e o instalador terão acesso à senha.
+                     </p>
+                 </div>
+
+                 <div>
+                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Notas / Configurações Adicionais</label>
+                     <textarea id="hard-notas" rows="3" placeholder="Memória, processador, histórico de avarias ou detalhes adicionais..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple"></textarea>
+                 </div>
+
+                 <div class="flex justify-end gap-3 pt-4 border-t border-white/5">
+                     <button type="button" onclick="closeHardwareAssetModal()" class="px-5 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition">
+                         Cancelar
+                     </button>
+                     <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-accent-fuchsia hover:bg-opacity-95 text-white transition">
+                         Salvar Ativo
+                     </button>
+                 </div>
+             </form>
+         </div>
+     </div>
+
+     <!-- MODAL: HISTÓRICO DE MOVIMENTAÇÃO DO ATIVO -->
+     <div id="modal-asset-history" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+         <div class="w-full max-w-lg glass border-white/10 rounded-2xl p-6 shadow-2xl relative">
+             <button onclick="closeAssetHistoryModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition duration-200">
+                 <i data-lucide="x" class="h-5 w-5"></i>
+             </button>
+             <div class="flex items-center space-x-3 mb-6">
+                 <div class="p-2.5 rounded-lg bg-accent-purple/20 text-accent-purple">
+                     <i data-lucide="history" class="h-6 w-6"></i>
+                 </div>
+                 <div>
+                     <h3 id="modal-history-title" class="font-outfit font-bold text-lg text-white">Histórico do Ativo</h3>
+                     <p id="modal-history-subtitle" class="text-xs text-slate-400">Rastreabilidade completa de movimentações e status</p>
+                 </div>
+             </div>
+             
+             <!-- Timeline Container -->
+             <div id="asset-history-timeline" class="space-y-4 max-h-72 overflow-y-auto pr-1 border-l-2 border-slate-800 ml-4 pl-6 relative">
+                 <!-- Preenchido via JS -->
+             </div>
+
+             <div class="flex justify-end pt-4 border-t border-white/5 mt-6">
+                 <button type="button" onclick="closeAssetHistoryModal()" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition">
+                     Fechar
+                 </button>
+             </div>
+         </div>
+     </div>
+
+    <!-- Modal: Autenticação (Login / Cadastro) [Novo] -->
+    <div id="modal-auth" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-xl">
+        <div class="w-full max-w-md glass border-white/10 rounded-2xl p-8 shadow-2xl relative flex flex-col gap-6">
+            <!-- Header do Modal -->
+            <div class="flex flex-col items-center text-center space-y-3">
+                <div class="h-12 w-12 rounded-2xl bg-gradient-to-tr from-accent-purple to-accent-fuchsia flex items-center justify-center shadow-lg shadow-accent-purple/20">
+                    <i data-lucide="zap" class="h-7 w-7 text-white animate-pulse"></i>
+                </div>
+                <div>
+                    <h3 id="auth-title" class="font-outfit font-extrabold text-2xl text-white tracking-tight bg-gradient-to-r from-white via-slate-200 to-accent-purple bg-clip-text text-transparent">Entrar no AlemaozinhoSystem32</h3>
+                    <p id="auth-subtitle" class="text-xs text-slate-400 mt-1 font-medium">Faça login para acessar o pipeline de filiais</p>
+                </div>
+            </div>
+
+            <!-- Caixa de Alerta de Erro (Escondida por padrão) -->
+            <div id="auth-error-box" class="hidden p-3.5 bg-rose-950/50 border border-rose-500/20 text-rose-400 text-xs rounded-xl flex items-start gap-2 shadow animate-pulse">
+                <i data-lucide="alert-circle" class="h-4.5 w-4.5 flex-shrink-0 mt-0.5 text-rose-400"></i>
+                <span id="auth-error-message" class="font-medium"></span>
+            </div>
+
+            <!-- Formulário de Auth -->
+            <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+                <!-- Campo Nome (Somente no Cadastro) -->
+                <div id="auth-field-name" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Nome Completo</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <i data-lucide="user" class="h-4 w-4"></i>
+                        </span>
+                        <input type="text" id="auth-name" placeholder="Seu nome completo" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-accent-purple transition duration-250">
+                    </div>
+                </div>
+
+                <!-- Campo E-mail -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Endereço de E-mail</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <i data-lucide="mail" class="h-4 w-4"></i>
+                        </span>
+                        <input type="email" id="auth-email" required placeholder="exemplo@email.com" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-accent-purple transition duration-250">
+                    </div>
+                </div>
+
+                <!-- Campo Senha -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Senha</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <i data-lucide="lock" class="h-4 w-4"></i>
+                        </span>
+                        <input type="password" id="auth-password" required placeholder="••••••••" class="w-full pl-9 pr-10 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-accent-purple transition duration-250">
+                        <button type="button" onclick="toggleAuthPasswordVisibility(event)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300">
+                            <i data-lucide="eye" class="h-4 w-4" id="auth-eye-icon"></i>
+                            <i data-lucide="eye-off" class="h-4 w-4 hidden" id="auth-eye-off-icon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Botão de Ação -->
+                <button type="submit" id="auth-submit-btn" class="w-full py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-accent-purple to-accent-fuchsia hover:opacity-95 text-white transition duration-250 shadow-lg shadow-accent-purple/20 flex items-center justify-center gap-2">
+                    <span id="auth-btn-text">Entrar no Sistema</span>
+                    <div id="auth-btn-spinner" class="hidden h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                </button>
+            </form>
+
+            <!-- Links de Alternância -->
+            <div class="text-center pt-2 border-t border-white/5 space-y-2">
+                <button id="auth-toggle-btn" onclick="toggleAuthMode()" class="text-xs font-bold text-slate-400 hover:text-accent-purple transition duration-200 font-semibold">
+                    Não tem uma conta? Cadastre-se
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 flex items-center space-x-2 px-4 py-3 rounded-xl shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 border">
+        <i id="toast-icon" class="h-5 w-5"></i>
+        <span id="toast-message" class="text-sm font-semibold"></span>
+    </div>
+
+    <!-- Main Logic Script -->
+    <script src="app.js"></script>
+    <script>
+        // Init Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
