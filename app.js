@@ -201,7 +201,7 @@ async function loadData() {
         snapB.forEach(doc => {
             branches.push({ id: doc.id, ...doc.data() });
         });
-        branches.sort((a, b) => a.nome.localeCompare(b.nome));
+        branches.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
 
         // Load profiles
         const snapProf = await db.collection("perfis").get();
@@ -209,7 +209,7 @@ async function loadData() {
         snapProf.forEach(doc => {
             profiles.push({ id: doc.id, ...doc.data() });
         });
-        profiles.sort((a, b) => a.nome.localeCompare(b.nome));
+        profiles.sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
 
         // Load user filiais
         const snapUF = await db.collection("usuario_filiais").get();
@@ -612,6 +612,10 @@ function closeSettingsModal() {
 }
 
 function openFilialModal() {
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem cadastrar filiais.", "error");
+        return;
+    }
     const form = document.getElementById("filial-form");
     if (form) form.reset();
     const modal = document.getElementById("modal-filial");
@@ -625,6 +629,10 @@ function closeFilialModal() {
 
 async function handleFilialSubmit(e) {
     e.preventDefault();
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem cadastrar filiais.", "error");
+        return;
+    }
     const nome = document.getElementById("fil-nome").value.trim();
     const cidade = document.getElementById("fil-cidade").value.trim();
     const estado = document.getElementById("fil-estado").value.trim().toUpperCase();
@@ -667,6 +675,10 @@ function toggleMotivoField() {
 }
 
 function openProjectModal(editId = null) {
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem cadastrar ou editar demandas.", "error");
+        return;
+    }
     const form = document.getElementById("project-form");
     if (form) form.reset();
 
@@ -740,6 +752,10 @@ async function uploadToFirebase(file) {
 
 async function handleProjectSubmit(e) {
     e.preventDefault();
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem salvar demandas.", "error");
+        return;
+    }
     const id = document.getElementById("proj-id").value;
     const titulo = document.getElementById("proj-titulo").value.trim();
     const id_filial = document.getElementById("proj-filial").value;
@@ -920,6 +936,10 @@ async function moveCurrentProject(newStatus) {
 }
 
 async function deleteProject(id) {
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem remover demandas.", "error");
+        return;
+    }
     if (!confirm("Tem certeza que deseja remover este projeto?")) return;
 
     try {
@@ -1078,6 +1098,12 @@ function showToast(message, type = "info") {
 
 // Aba Navigation
 function switchTab(tabId) {
+    if (tabId === 'admin-panel' && (!currentUser || currentUser.role !== 'Administrador')) {
+        showToast("Acesso Negado: Apenas Administradores podem acessar o Controle Admin.", "error");
+        switchTab("dashboard");
+        return;
+    }
+
     const tabs = ['dashboard', 'solicitacoes', 'inventario', 'admin-panel'];
     
     tabs.forEach(t => {
@@ -1323,6 +1349,7 @@ async function handleAuthSubmit(e) {
         if (authMode === 'login') {
             await auth.signInWithEmailAndPassword(email, password);
         } else {
+            isSigningUp = true;
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
             const user = userCredential.user;
             
@@ -1359,6 +1386,7 @@ async function handleAuthSubmit(e) {
         errorMessage.textContent = error.message || "Ocorreu um erro inesperado.";
         errorBox.classList.remove("hidden");
     } finally {
+        isSigningUp = false;
         submitBtn.disabled = false;
         spinner.classList.add("hidden");
         btnText.textContent = authMode === 'login' ? "Entrar no Sistema" : "Criar Conta e Acessar";
@@ -1790,10 +1818,11 @@ function renderAdminPanel() {
 
         const tr = document.createElement("tr");
         tr.className = "hover:bg-white/[0.02] transition duration-150";
+        const pNomeEscaped = (p.nome || "").replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         tr.innerHTML = `
             <td class="px-6 py-4 font-semibold text-white">
                 <div class="flex items-center gap-2">
-                    <span>${p.nome}</span>
+                    <span>${p.nome || "Novo Usuário"}</span>
                     ${isPending ? `<span class="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-1.5 py-0.5 rounded-md animate-pulse" title="Novo cadastro aguardando liberação de acesso"><i data-lucide="shield-alert" class="h-3 w-3"></i> PENDENTE</span>` : ""}
                 </div>
             </td>
@@ -1801,7 +1830,7 @@ function renderAdminPanel() {
             <td class="px-6 py-4 max-w-xs md:max-w-md lg:max-w-lg flex flex-wrap gap-1">${branchesListText}</td>
             <td class="px-6 py-4 text-right">
                 ${isPending ? `
-                <button onclick="quickReleaseUserAccess('${p.id}', '${p.nome.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-accent-emerald/15 hover:bg-accent-emerald/25 text-accent-emerald border border-accent-emerald/20 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm shadow-accent-emerald/5 mr-2">
+                <button onclick="quickReleaseUserAccess('${p.id}', '${pNomeEscaped}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-accent-emerald/15 hover:bg-accent-emerald/25 text-accent-emerald border border-accent-emerald/20 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm shadow-accent-emerald/5 mr-2">
                     <i data-lucide="unlock" class="h-3.5 w-3.5"></i>
                     <span>Liberar Acesso</span>
                 </button>
@@ -1824,6 +1853,10 @@ function renderAdminPanel() {
 }
 
 function openPermissionsModal(userId) {
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem gerenciar permissões.", "error");
+        return;
+    }
     const user = profiles.find(u => u.id === userId);
     if (!user) return;
 
@@ -1865,6 +1898,10 @@ function closePermissionsModal() {
 
 async function handlePermissionsSubmit(e) {
     e.preventDefault();
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem alterar permissões.", "error");
+        return;
+    }
     const userId = document.getElementById("permissions-user-id").value;
     const role = document.getElementById("permissions-role").value;
 
@@ -1917,6 +1954,10 @@ async function handlePermissionsSubmit(e) {
 }
 
 async function quickReleaseUserAccess(userId, userName) {
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem liberar acesso.", "error");
+        return;
+    }
     try {
         // Marcar usuário como aprovado no Firestore
         await db.collection("perfis").doc(userId).update({ aprovado: true });
@@ -2118,7 +2159,7 @@ async function loadFilialCredentials(filialId) {
                 senha_limpa: data.senha_criptografada ? atob(data.senha_criptografada) : ""
             });
         });
-        creds.sort((a, b) => a.nome_identificador.localeCompare(b.nome_identificador));
+        creds.sort((a, b) => (a.nome_identificador || "").localeCompare(b.nome_identificador || ""));
 
         if (creds.length === 0) {
             tableBody.innerHTML = `
@@ -2379,7 +2420,7 @@ async function exportTechnicalData(format) {
                 senha_limpa: data.senha_criptografada ? atob(data.senha_criptografada) : ""
             });
         });
-        creds.sort((a, b) => a.nome_identificador.localeCompare(b.nome_identificador));
+        creds.sort((a, b) => (a.nome_identificador || "").localeCompare(b.nome_identificador || ""));
 
         if (creds.length === 0) {
             showToast("Nenhum dado cadastrado para exportar.", "info");
@@ -2496,7 +2537,7 @@ async function loadInventoryAssets() {
                 senha_limpa: hasAccess ? (data.senha_criptografada ? atob(data.senha_criptografada) : "") : null
             });
         });
-        assets.sort((a, b) => a.marca_modelo.localeCompare(b.marca_modelo));
+        assets.sort((a, b) => (a.marca_modelo || "").localeCompare(b.marca_modelo || ""));
 
         const btnCreateHW = document.getElementById("btn-create-hardware");
         if (btnCreateHW) {
@@ -3148,6 +3189,10 @@ function filterAdminPasswords() {
 }
 
 async function deleteHardwareAsset(assetId) {
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem remover ativos de hardware.", "error");
+        return;
+    }
     if (!confirm("Tem certeza de que deseja remover permanentemente este ativo de hardware do inventário? Esta ação excluirá também todo o histórico de movimentações.")) return;
 
     try {
