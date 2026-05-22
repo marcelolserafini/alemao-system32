@@ -3709,14 +3709,14 @@ function closeAssetHistoryModal() {
 
 const _origHandleAuthSession = handleAuthSession;
 
-async function handleAuthSession(user) {
+handleAuthSession = async function(user) {
     cleanupListeners();
     await _origHandleAuthSession(user);
     if (user && currentUser) {
         initRealtimeListeners();
         initNotificationsListener();
     }
-}
+};
 
 function applyInventoryFilters() {
     renderInventoryAssets();
@@ -4712,12 +4712,8 @@ moveCurrentProject = async function(newStatus) {
 
 const _origHandleAuthSessionExt = handleAuthSession;
 handleAuthSession = async function(user) {
-    cleanupListeners();
     await _origHandleAuthSessionExt(user);
     if (user && currentUser) {
-        initRealtimeListeners();
-        initNotificationsListener();
-
         const kanban = document.getElementById("board-kanban-view");
         const list = document.getElementById("board-list-view");
         const icon = document.getElementById("toggle-view-icon");
