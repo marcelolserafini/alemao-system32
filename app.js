@@ -900,9 +900,18 @@ async function openDetails(projectId) {
         deleteProject(proj.id);
     };
 
+    // Set the logged-in user in comment form label
+    const commentAutorLabel = document.getElementById("comment-autor-label");
+    if (commentAutorLabel) {
+        commentAutorLabel.textContent = currentUser ? `${currentUser.nome} (${currentUser.role})` : "Operador";
+    }
+
     // Load comments associated with the project
     document.getElementById("comment-form").reset();
     await loadComments(proj.id);
+
+    // Load linked assets of this project
+    await loadProjectLinkedAssets(proj.id);
 
     document.getElementById("modal-details").classList.remove("hidden");
     lucide.createIcons();
@@ -996,18 +1005,24 @@ async function handleCommentSubmit(e) {
     e.preventDefault();
     if (!currentProjectId) return;
 
-    const authorInput = document.getElementById("comment-autor");
     const textInput = document.getElementById("comment-texto");
-    const autor = authorInput.value.trim();
     const texto = textInput.value.trim();
 
-    if (!autor || !texto) return;
+    if (!texto) return;
+    if (!currentUser) {
+        showToast("Você precisa estar logado para comentar.", "error");
+        return;
+    }
+
+    const autor = currentUser.nome || "Operador";
+    const idUsuario = currentUser.id || currentUser.uid || "";
 
     try {
         const newCommRef = db.collection("comentarios").doc();
         await newCommRef.set({
             id: newCommRef.id,
             id_projeto: currentProjectId,
+            id_usuario: idUsuario,
             autor,
             texto,
             created_at: new Date().toISOString()
@@ -1026,6 +1041,214 @@ async function handleCommentSubmit(e) {
 
     } catch (err) {
         showToast("Erro ao enviar comentário: " + err.message, "error");
+    }
+}
+
+// ==========================================
+// INTEGRATION: INVENTORY ASSETS TO PROJECTS
+// ==========================================
+async function loadProjectLinkedAssets(projectId) {
+    const listContainer = document.getElementById("details-assets-list");
+    const dropdown = document.getElementById("details-link-asset-dropdown");
+    if (!listContainer || !dropdown) return;
+
+    listContainer.innerHTML = `<p class="text-xs text-slate-500 italic py-1">Carregando equipamentos...</p>`;
+    
+    // Filter linked assets from the global 'assets' array
+    const linked = assets.filter(a => a.id_projeto_atual === projectId);
+    
+    listContainer.innerHTML = "";
+    if (linked.length === 0) {
+        listContainer.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-4 bg-slate-900/30 rounded-xl border border-dashed border-white/5 text-center">
+                <i data-lucide="info" class="h-4 w-4 text-slate-500 mb-1"></i>
+                <p class="text-[11px] text-slate-500">Nenhum equipamento do inventário vinculado a esta demanda.</p>
+            </div>
+        `;
+    } else {
+        linked.forEach(a => {
+            const itemBox = document.createElement("div");
+            itemBox.className = "flex items-center justify-between p-2.5 rounded-lg bg-slate-900/60 border border-white/5 text-xs";
+            itemBox.innerHTML = `
+                <div class="flex flex-col space-y-0.5">
+                    <div class="flex items-center gap-1.5">
+                        <span class="px-1.5 py-0.5 rounded bg-accent-emerald/10 text-accent-emerald border border-accent-emerald/20 text-[9px] font-bold uppercase tracking-wider">${a.codigo_patrimonio_ou_tag}</span>
+                        <span class="font-semibold text-slate-200">${a.marca_modelo || "Sem Marca/Modelo"}</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 font-medium">${a.categoria}</span>
+                </div>
+                <button type="button" onclick="unlinkAssetFromCurrentProject('${a.id}')" class="flex items-center gap-1 text-[10px] font-bold text-rose-400 hover:text-rose-300 px-2 py-1 hover:bg-rose-500/10 rounded-md border border-rose-500/15 transition duration-150">
+                    <i data-lucide="unlink" class="h-3 w-3"></i>
+                    <span>Desvincular</span>
+                </button>
+            `;
+            listContainer.appendChild(itemBox);
+        });
+    }
+
+    // Populate dropdown with available assets (status is 'Disponível' and id_projeto_atual is empty/null)
+    const available = assets.filter(a => a.status === 'Disponível' && !a.id_projeto_atual);
+    dropdown.innerHTML = "";
+    
+    if (available.length === 0) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "Nenhum equipamento disponível no estoque";
+        dropdown.appendChild(opt);
+        dropdown.disabled = true;
+    } else {
+        dropdown.disabled = false;
+        
+        // Add a default placeholder option
+        const placeholderOpt = document.createElement("option");
+        placeholderOpt.value = "";
+        placeholderOpt.textContent = "Selecione um equipamento para vincular...";
+        dropdown.appendChild(placeholderOpt);
+
+        available.forEach(a => {
+            const opt = document.createElement("option");
+            opt.value = a.id;
+            opt.textContent = `[${a.codigo_patrimonio_ou_tag}] ${a.categoria} - ${a.marca_modelo}`;
+            dropdown.appendChild(opt);
+        });
+    }
+
+    lucide.createIcons();
+}
+
+async function linkAssetToCurrentProject() {
+    if (!currentProjectId) return;
+    const dropdown = document.getElementById("details-link-asset-dropdown");
+    if (!dropdown) return;
+    const assetId = dropdown.value;
+    if (!assetId) {
+        showToast("Selecione um equipamento válido para vincular.", "error");
+        return;
+    }
+
+    const proj = projects.find(p => p.id === currentProjectId);
+    if (!proj) {
+        showToast("Projeto não encontrado.", "error");
+        return;
+    }
+
+    const asset = assets.find(a => a.id === assetId);
+    if (!asset) {
+        showToast("Equipamento não encontrado no inventário.", "error");
+        return;
+    }
+
+    try {
+        // 1. Update the asset in Firestore
+        await db.collection("inventario_ativos").doc(assetId).update({
+            id_projeto_atual: currentProjectId,
+            status: "Em Uso",
+            id_filial_atual: proj.id_filial || null
+        });
+
+        // 2. Add log to historico_ativos
+        await db.collection("historico_ativos").add({
+            id_ativo: assetId,
+            data_movimentacao: new Date().toISOString(),
+            id_usuario: currentUser ? currentUser.id : "unknown",
+            usuario_nome: currentUser ? currentUser.nome : "Operador",
+            status_origem: asset.status || "Disponível",
+            status_destino: "Em Uso",
+            filial_origem_id: asset.id_filial_atual || null,
+            filial_destino_id: proj.id_filial || null,
+            descricao_acao: `Equipamento vinculado ao projeto '${proj.titulo}'.`
+        });
+
+        // 3. Add audit comment in the project details
+        const newCommRef = db.collection("comentarios").doc();
+        await newCommRef.set({
+            id: newCommRef.id,
+            id_projeto: currentProjectId,
+            id_usuario: "sistema",
+            autor: "Sistema de Auditoria",
+            texto: `📦 EQUIPAMENTO VINCULADO: [${asset.categoria}] ${asset.marca_modelo} (TAG: ${asset.codigo_patrimonio_ou_tag}) foi alocado a esta demanda por ${currentUser ? currentUser.nome : 'um operador'}.`,
+            created_at: new Date().toISOString()
+        });
+
+        // 4. Update project's updated_at field
+        await db.collection("projetos").doc(currentProjectId).update({
+            updated_at: new Date().toISOString()
+        });
+
+        showToast("Equipamento vinculado com sucesso!", "success");
+
+        // 5. Reload all data and UI
+        await loadInventoryAssets();
+        await loadProjectLinkedAssets(currentProjectId);
+        await loadComments(currentProjectId);
+        await loadData();
+
+    } catch (error) {
+        showToast("Erro ao vincular equipamento: " + error.message, "error");
+        console.error(error);
+    }
+}
+
+async function unlinkAssetFromCurrentProject(assetId) {
+    if (!currentProjectId) return;
+    const proj = projects.find(p => p.id === currentProjectId);
+    if (!proj) return;
+
+    const asset = assets.find(a => a.id === assetId);
+    if (!asset) {
+        showToast("Equipamento não encontrado no inventário.", "error");
+        return;
+    }
+
+    try {
+        // 1. Update the asset in Firestore: clear project association, set status to 'Disponível'
+        // and set id_filial_atual to null (returns to Central Stock)
+        await db.collection("inventario_ativos").doc(assetId).update({
+            id_projeto_atual: null,
+            status: "Disponível",
+            id_filial_atual: null
+        });
+
+        // 2. Add log to historico_ativos
+        await db.collection("historico_ativos").add({
+            id_ativo: assetId,
+            data_movimentacao: new Date().toISOString(),
+            id_usuario: currentUser ? currentUser.id : "unknown",
+            usuario_nome: currentUser ? currentUser.nome : "Operador",
+            status_origem: asset.status || "Em Uso",
+            status_destino: "Disponível",
+            filial_origem_id: asset.id_filial_atual || null,
+            filial_destino_id: null,
+            descricao_acao: `Equipamento desvinculado do projeto '${proj.titulo}' e retornado ao Estoque Central.`
+        });
+
+        // 3. Add audit comment in the project details
+        const newCommRef = db.collection("comentarios").doc();
+        await newCommRef.set({
+            id: newCommRef.id,
+            id_projeto: currentProjectId,
+            id_usuario: "sistema",
+            autor: "Sistema de Auditoria",
+            texto: `🔄 EQUIPAMENTO DESVINCULADO: [${asset.categoria}] ${asset.marca_modelo} (TAG: ${asset.codigo_patrimonio_ou_tag}) foi desvinculado desta demanda por ${currentUser ? currentUser.nome : 'um operador'} e retornou ao Estoque Central.`,
+            created_at: new Date().toISOString()
+        });
+
+        // 4. Update project's updated_at field
+        await db.collection("projetos").doc(currentProjectId).update({
+            updated_at: new Date().toISOString()
+        });
+
+        showToast("Equipamento desvinculado com sucesso!", "success");
+
+        // 5. Reload all data and UI
+        await loadInventoryAssets();
+        await loadProjectLinkedAssets(currentProjectId);
+        await loadComments(currentProjectId);
+        await loadData();
+
+    } catch (error) {
+        showToast("Erro ao desvincular equipamento: " + error.message, "error");
+        console.error(error);
     }
 }
 
@@ -1118,6 +1341,14 @@ function switchTab(tabId) {
         } else {
             tabBtn.className = "flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl text-slate-400 hover:text-white border border-transparent transition duration-200";
             if (viewSection) viewSection.classList.add("hidden");
+        }
+
+        // Força ocultação do botão administrativo caso o usuário logado não seja Administrador
+        if (t === 'admin-panel') {
+            const isAdm = currentUser && currentUser.role === 'Administrador';
+            if (!isAdm) {
+                tabBtn.classList.add("hidden");
+            }
         }
     });
 
