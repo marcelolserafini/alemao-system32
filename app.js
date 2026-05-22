@@ -20,6 +20,7 @@ let currentProjectId = null; // For details modal interaction
 let currentFilialId = null; // active filial for modal panel
 let activeFilialPanelTab = 'credenciais'; // active tab in filial panel
 let authMode = 'login'; // 'login' or 'signup'
+let isSigningUp = false; // Flag to prevent race conditions between signup writing and Auth state change
 
 // Initialize application
 document.addEventListener("DOMContentLoaded", () => {
@@ -1205,22 +1206,38 @@ async function handleAuthSession(user) {
                 profile = doc.data();
                 profile.id = doc.id;
             } else {
-                console.warn("Perfil não encontrado no Firestore. Criando perfil...");
-                const userName = user.displayName || user.email.split('@')[0] || 'Novo Usuário';
-                
-                // Verificar se é o primeiro usuário cadastrado na coleção 'perfis'
-                const profilesSnap = await db.collection("perfis").limit(1).get();
-                const isFirst = profilesSnap.empty;
-                
-                profile = {
-                    id: userId,
-                    nome: userName,
-                    role: isFirst ? 'Administrador' : 'Colaborador',
-                    email: user.email || '',
-                    aprovado: isFirst ? true : false,
-                    created_at: new Date().toISOString()
-                };
-                await db.collection("perfis").doc(userId).set(profile);
+                // Se o fluxo for de cadastro, aguarda a gravação pelo handleAuthSubmit
+                if (isSigningUp) {
+                    console.log("Fluxo de cadastro detectado. Aguardando gravação do perfil no Firestore...");
+                    for (let i = 0; i < 30; i++) {
+                        await new Promise(r => setTimeout(r, 100));
+                        doc = await db.collection("perfis").doc(userId).get();
+                        if (doc.exists) {
+                            profile = doc.data();
+                            profile.id = doc.id;
+                            break;
+                        }
+                    }
+                }
+
+                if (!profile) {
+                    console.warn("Perfil não encontrado no Firestore. Criando perfil padrão...");
+                    const userName = user.displayName || user.email.split('@')[0] || 'Novo Usuário';
+                    
+                    // Verificar se é o primeiro usuário cadastrado na coleção 'perfis'
+                    const profilesSnap = await db.collection("perfis").limit(1).get();
+                    const isFirst = profilesSnap.empty;
+                    
+                    profile = {
+                        id: userId,
+                        nome: userName,
+                        role: isFirst ? 'Administrador' : 'Colaborador',
+                        email: user.email || '',
+                        aprovado: isFirst ? true : false,
+                        created_at: new Date().toISOString()
+                    };
+                    await db.collection("perfis").doc(userId).set(profile);
+                }
             }
 
             if (!profile.aprovado) {
