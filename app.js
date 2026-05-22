@@ -2901,6 +2901,13 @@ function renderInventoryAssets() {
 
         card.innerHTML = `
             <div>
+                <!-- Image Header -->
+                ${a.url_foto ? `
+                <div class="w-full h-32 rounded-lg overflow-hidden border border-white/5 mb-3.5 bg-slate-900 flex items-center justify-center relative">
+                    <img src="${a.url_foto}" alt="Equipamento" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                </div>
+                ` : ''}
+
                 <!-- Status & Tag header -->
                 <div class="flex items-center justify-between gap-2 mb-3">
                     <span class="text-[9px] font-extrabold px-2 py-0.5 rounded border ${badgeColor} uppercase tracking-wider">
@@ -2922,6 +2929,10 @@ function renderInventoryAssets() {
                     <div class="flex justify-between font-mono">
                         <span class="text-slate-500 font-semibold">Série:</span>
                         <span class="text-slate-300 font-bold">${a.numero_serie || "-"}</span>
+                    </div>
+                    <div class="flex justify-between font-mono">
+                        <span class="text-slate-500 font-semibold">Setor / Depto:</span>
+                        <span class="text-slate-300 font-bold">${a.setor || "-"}</span>
                     </div>
                     <div class="flex justify-between font-mono">
                         <span class="text-slate-500 font-semibold">Login / Usuário:</span>
@@ -3049,9 +3060,23 @@ function openHardwareAssetModal(assetId = null) {
             document.getElementById("hard-notas").value = asset.notas || "";
             const loginInput = document.getElementById("hard-login");
             if (loginInput) loginInput.value = asset.usuario_acesso || "";
+
+            // Populate photo preview if it exists
+            if (asset.url_foto) {
+                imgurTempUrl = asset.url_foto;
+                const previewContainer = document.getElementById("hard-foto-preview-container");
+                const previewImg = document.getElementById("hard-foto-preview");
+                if (previewContainer) previewContainer.classList.remove("hidden");
+                if (previewImg) previewImg.src = asset.url_foto;
+                const labelSpan = document.getElementById("hard-file-label");
+                if (labelSpan) labelSpan.textContent = "Alterar Foto";
+            } else {
+                removeHardFoto();
+            }
         }
     } else {
         document.getElementById("modal-hardware-title").textContent = "Cadastrar Ativo de Hardware";
+        removeHardFoto();
     }
 
     const modal = document.getElementById("modal-hardware");
@@ -3120,7 +3145,9 @@ async function handleHardwareSubmit(e) {
             valor_estimado: valor,
             notas: notas,
             usuario_acesso: login,
-            senha_criptografada: finalSenhaCrip
+            senha_criptografada: finalSenhaCrip,
+            setor: document.getElementById("hard-setor") ? document.getElementById("hard-setor").value.trim() : "",
+            url_foto: imgurTempUrl
         };
 
         if (assetId) {
@@ -3676,6 +3703,1088 @@ function closeAssetHistoryModal() {
     if (modal) modal.classList.add("hidden");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH: handleAuthSession — trigger listeners and update views
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _origHandleAuthSession = handleAuthSession;
+
+async function handleAuthSession(user) {
+    cleanupListeners();
+    await _origHandleAuthSession(user);
+    if (user && currentUser) {
+        initRealtimeListeners();
+        initNotificationsListener();
+    }
+}
+
 function applyInventoryFilters() {
     renderInventoryAssets();
 }
+//           Imgur Upload, Blocked User Audit, CryptoJS Credentials, PWA
+// ==========================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GLOBAL ADDITIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// CryptoJS encryption key
+const CRIPTO_KEY = "AleSystem2025@SecretKey#32";
+
+// Imgur API Client-ID
+const IMGUR_CLIENT_ID = "YOUR_IMGUR_CLIENT_ID";
+
+// Notifications state
+let notifications = [];
+let unreadNotificationIds = new Set();
+let notifPanelOpen = false;
+
+// Board view state (persisted in localStorage)
+let boardView = localStorage.getItem('boardView') || 'kanban';
+
+// Snapshot unsubscribers for cleanup on logout
+let unsubscribeListeners = [];
+
+// Pending blocked user audit
+let pendingBlockUserId = null;
+
+// Hardware Photo Control State
+let isHardwarePhotoUploading = false;
+let hardwarePhotoUploadFailed = false;
+let selectedHardwareFile = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 1: REAL-TIME SYNC — onSnapshot refactored loadData
+// ─────────────────────────────────────────────────────────────────────────────
+
+function cleanupListeners() {
+    unsubscribeListeners.forEach(unsub => { try { unsub(); } catch (e) {} });
+    unsubscribeListeners = [];
+    console.log('[RT] All snapshot listeners cleaned up.');
+}
+
+function initRealtimeListeners() {
+    if (!db) return;
+    cleanupListeners();
+
+    // — Projetos
+    const unsubProjetos = db.collection("projetos").onSnapshot(snap => {
+        projects = [];
+        snap.forEach(doc => {
+            const data = doc.data();
+            const filialObj = branches.find(b => b.id === data.id_filial);
+            projects.push({
+                id: doc.id, ...data,
+                filial_nome: filialObj ? filialObj.nome : "Filial Removida",
+                filial_cidade: filialObj ? filialObj.cidade : "",
+                filial_estado: filialObj ? filialObj.estado : ""
+            });
+        });
+        projects.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        renderBoard();
+        updateStats();
+    }, err => console.error('[RT] projetos error:', err));
+    unsubscribeListeners.push(unsubProjetos);
+
+    // — Solicitações
+    const unsubSol = db.collection("solicitacoes").onSnapshot(snap => {
+        solicitacoes = [];
+        snap.forEach(doc => {
+            const data = doc.data();
+            const filialObj = branches.find(b => b.id === data.id_filial);
+            solicitacoes.push({
+                id: doc.id, ...data,
+                filial_nome: filialObj ? filialObj.nome : "Filial Removida",
+                filial_cidade: filialObj ? filialObj.cidade : "",
+                filial_estado: filialObj ? filialObj.estado : ""
+            });
+        });
+        solicitacoes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const solView = document.getElementById("view-solicitacoes");
+        if (solView && !solView.classList.contains("hidden")) {
+            renderSolicitacoesFiltered();
+            updateSolicitacoesBadge();
+        }
+        updateSolicitacoesBadge();
+    }, err => console.error('[RT] solicitacoes error:', err));
+    unsubscribeListeners.push(unsubSol);
+
+    // — Inventário
+    const unsubInv = db.collection("inventario_ativos").onSnapshot(snap => {
+        assets = [];
+        snap.forEach(doc => assets.push({ id: doc.id, ...doc.data() }));
+        const invView = document.getElementById("view-inventario");
+        if (invView && !invView.classList.contains("hidden")) {
+            renderInventoryAssets();
+            updateInventoryStats();
+        }
+    }, err => console.error('[RT] inventario error:', err));
+    unsubscribeListeners.push(unsubInv);
+
+    console.log('[RT] Real-time listeners initialized for projetos, solicitacoes, inventario.');
+}
+
+function updateSolicitacoesBadge() {
+    let visibleRequests = solicitacoes;
+    if (currentUser && currentUser.role === 'Colaborador') {
+        const allowedBranchIds = userFiliais
+            .filter(uf => uf.id_usuario === currentUser.id)
+            .map(uf => uf.id_filial);
+        visibleRequests = solicitacoes.filter(s => allowedBranchIds.includes(s.id_filial));
+    }
+    const pendingCount = visibleRequests.filter(s => s.status === "Aguardando Triagem").length;
+    const badge = document.getElementById("badge-solicitacoes-count");
+    if (badge) {
+        badge.textContent = pendingCount;
+        if (pendingCount > 0) badge.classList.remove("hidden");
+        else badge.classList.add("hidden");
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 2: CENTRAL DE NOTIFICAÇÕES (BELL ICON)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function initNotificationsListener() {
+    if (!db || !currentUser) return;
+
+    const unsubNotif = db.collection("notificacoes")
+        .where("id_usuario_destino", "==", currentUser.id)
+        .where("lido", "==", false)
+        .onSnapshot(snap => {
+            notifications = [];
+            unreadNotificationIds.clear();
+            snap.forEach(doc => {
+                const n = { id: doc.id, ...doc.data() };
+                notifications.push(n);
+                unreadNotificationIds.add(doc.id);
+            });
+            notifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            renderNotificationsPanel();
+            updateNotifBadge();
+        }, err => console.error('[RT] notifications error:', err));
+    unsubscribeListeners.push(unsubNotif);
+
+    // Show the bell wrapper since user is logged in
+    const wrapper = document.getElementById("notif-wrapper");
+    if (wrapper) wrapper.classList.remove("hidden");
+}
+
+function updateNotifBadge() {
+    const badge = document.getElementById("notifications-badge");
+    const count = unreadNotificationIds.size;
+    if (badge) {
+        badge.textContent = count;
+        if (count > 0) badge.classList.remove("hidden");
+        else badge.classList.add("hidden");
+    }
+}
+
+function toggleNotifPanel() {
+    const panel = document.getElementById("notifications-panel");
+    if (!panel) return;
+    notifPanelOpen = !notifPanelOpen;
+    panel.classList.toggle("hidden", !notifPanelOpen);
+    if (notifPanelOpen) lucide.createIcons();
+}
+
+function renderNotificationsPanel() {
+    const list = document.getElementById("notifications-list");
+    if (!list) return;
+
+    if (notifications.length === 0) {
+        list.innerHTML = `<p class="text-xs text-slate-500 italic text-center py-6">Sem novas notificações</p>`;
+        return;
+    }
+
+    list.innerHTML = notifications.slice(0, 20).map(n => {
+        const icon = n.tipo === 'comentario' ? 'message-circle' : 'git-branch';
+        const timeAgo = formatTimeAgo(n.created_at);
+        return `
+        <div onclick="openNotifProject('${n.id_projeto}', '${n.id}')" class="flex items-start gap-3 px-4 py-3 hover:bg-white/5 cursor-pointer transition">
+            <div class="mt-0.5 p-1.5 rounded-lg bg-accent-purple/15 text-accent-purple flex-shrink-0">
+                <i data-lucide="${icon}" class="h-3.5 w-3.5"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-xs text-slate-200 font-medium leading-snug">${escapeHtml(n.mensagem || '')}</p>
+                <p class="text-[10px] text-slate-500 mt-0.5">${timeAgo}</p>
+            </div>
+            <span class="h-1.5 w-1.5 rounded-full bg-accent-purple flex-shrink-0 mt-1.5"></span>
+        </div>`;
+    }).join('');
+    lucide.createIcons();
+}
+
+async function openNotifProject(projectId, notifId) {
+    toggleNotifPanel(); // close panel
+    if (notifId) await markNotificationRead(notifId);
+    if (projectId) openDetails(projectId);
+}
+
+async function markNotificationRead(notifId) {
+    if (!db || !notifId) return;
+    try {
+        await db.collection("notificacoes").doc(notifId).update({ lido: true });
+    } catch (e) { console.error('markNotificationRead:', e); }
+}
+
+async function markAllNotifsRead() {
+    if (!db) return;
+    const batch = db.batch();
+    notifications.forEach(n => {
+        batch.update(db.collection("notificacoes").doc(n.id), { lido: true });
+    });
+    await batch.commit().catch(e => console.error(e));
+    toggleNotifPanel();
+}
+
+async function sendNotification(idProjetoDestino, tipo, mensagem, excludeUserId) {
+    if (!db) return;
+    try {
+        // Get all profiles in the project's filial
+        const proj = projects.find(p => p.id === idProjetoDestino);
+        if (!proj) return;
+        const filialUserIds = userFiliais
+            .filter(uf => uf.id_filial === proj.id_filial)
+            .map(uf => uf.id_usuario);
+
+        // Send to all relevant users except the actor
+        const allTargets = profiles.filter(p =>
+            (p.role === 'Administrador' || filialUserIds.includes(p.id)) &&
+            p.id !== excludeUserId
+        );
+
+        const batch = db.batch();
+        allTargets.forEach(target => {
+            const ref = db.collection("notificacoes").doc();
+            batch.set(ref, {
+                id_projeto: idProjetoDestino,
+                id_usuario_destino: target.id,
+                tipo,
+                mensagem,
+                lido: false,
+                created_at: new Date().toISOString()
+            });
+        });
+        await batch.commit();
+    } catch (e) { console.error('sendNotification:', e); }
+}
+
+function formatTimeAgo(isoString) {
+    if (!isoString) return '';
+    const diff = Date.now() - new Date(isoString).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Agora mesmo';
+    if (mins < 60) return `${mins}m atrás`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h atrás`;
+    return `${Math.floor(hrs / 24)}d atrás`;
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 3: AUTO PATRIMÔNIO CODE + SETOR FIELD
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function generatePatrimonioCode() {
+    if (!db) return `PAT-${Date.now()}`;
+    const today = new Date();
+    const datePart = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const prefix = `PAT-${datePart}-`;
+
+    try {
+        const snap = await db.collection("inventario_ativos")
+            .where("codigo_patrimonio_ou_tag", ">=", prefix)
+            .where("codigo_patrimonio_ou_tag", "<", prefix + "Z")
+            .get();
+
+        const existing = [];
+        snap.forEach(doc => {
+            const tag = doc.data().codigo_patrimonio_ou_tag || '';
+            const numPart = tag.replace(prefix, '');
+            const num = parseInt(numPart, 10);
+            if (!isNaN(num)) existing.push(num);
+        });
+
+        const nextNum = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+        return `${prefix}${String(nextNum).padStart(4, '0')}`;
+    } catch (e) {
+        console.error('generatePatrimonioCode:', e);
+        return `${prefix}0001`;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 7: BOARD LIST VIEW (ACCORDION)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function toggleBoardView() {
+    boardView = boardView === 'kanban' ? 'list' : 'kanban';
+    localStorage.setItem('boardView', boardView);
+
+    const kanban = document.getElementById("board-kanban-view");
+    const list = document.getElementById("board-list-view");
+    const icon = document.getElementById("toggle-view-icon");
+    const text = document.getElementById("toggle-view-text");
+
+    if (boardView === 'list') {
+        if (kanban) kanban.classList.add("hidden");
+        if (list) list.classList.remove("hidden");
+        if (icon) icon.setAttribute("data-lucide", "layout-dashboard");
+        if (text) text.textContent = "Modo Kanban";
+    } else {
+        if (kanban) kanban.classList.remove("hidden");
+        if (list) list.classList.add("hidden");
+        if (icon) icon.setAttribute("data-lucide", "list");
+        if (text) text.textContent = "Modo Lista";
+    }
+    lucide.createIcons();
+
+    if (boardView === 'list') {
+        renderBoardList();
+    } else {
+        renderBoard();
+    }
+}
+
+function renderBoardList() {
+    const container = document.getElementById("board-list-view");
+    if (!container) return;
+
+    const searchEl = document.getElementById("filter-search");
+    const filialEl = document.getElementById("filter-filial");
+    const urgenciaEl = document.getElementById("filter-urgencia");
+    const searchQuery = searchEl ? searchEl.value.toLowerCase() : '';
+    const filialFilter = filialEl ? filialEl.value : '';
+    const urgenciaFilter = urgenciaEl ? urgenciaEl.value : '';
+
+    let allowedBranchIds = [];
+    if (currentUser && currentUser.role === 'Colaborador') {
+        allowedBranchIds = userFiliais.filter(uf => uf.id_usuario === currentUser.id).map(uf => uf.id_filial);
+    }
+
+    const filtered = projects.filter(p => {
+        if (currentUser && currentUser.role === 'Colaborador' && !allowedBranchIds.includes(p.id_filial)) return false;
+        if (searchQuery && !p.titulo.toLowerCase().includes(searchQuery)) return false;
+        if (filialFilter && p.id_filial !== filialFilter) return false;
+        if (urgenciaFilter && p.urgencia !== urgenciaFilter) return false;
+        return true;
+    });
+
+    const statusColors = {
+        "Banco de Ideias": "text-slate-400",
+        "Backlog de Implementação": "text-amber-400",
+        "Em Andamento": "text-accent-purple",
+        "Concluído": "text-emerald-400"
+    };
+    const urgencyColors = {
+        "Baixa": "text-slate-400", "Média": "text-sky-400",
+        "Alta": "text-amber-400", "Crítica": "text-rose-400"
+    };
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="flex flex-col items-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-2xl">
+            <i data-lucide="inbox" class="h-8 w-8 mb-2 opacity-40"></i>
+            <span class="text-sm font-semibold">Nenhum projeto encontrado</span>
+        </div>`;
+        lucide.createIcons();
+        return;
+    }
+
+    container.innerHTML = filtered.map(p => {
+        const branch = branches.find(b => b.id === p.id_filial);
+        const branchName = branch ? branch.nome : "Sem filial";
+        const statusColor = statusColors[p.status] || 'text-slate-400';
+        const urgColor = urgencyColors[p.urgencia] || 'text-slate-400';
+        const descPreview = (p.descricao || '').slice(0, 200);
+
+        return `
+        <div class="glass border border-white/5 rounded-xl overflow-hidden transition-all duration-300">
+            <div onclick="toggleAccordion('${p.id}')" class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/5 transition select-none">
+                <i data-lucide="chevron-right" class="h-4 w-4 text-slate-500 transition-transform duration-200" id="acc-icon-${p.id}"></i>
+                <span class="flex-1 font-semibold text-slate-200 text-sm">${escapeHtml(p.titulo)}</span>
+                <span class="text-[10px] font-bold ${urgColor} bg-slate-900/60 px-2 py-0.5 rounded border border-current/20">${p.urgencia}</span>
+                <span class="text-[10px] font-semibold ${statusColor} hidden sm:block">${p.status}</span>
+                <span class="text-[10px] text-accent-purple font-bold hidden md:block">${escapeHtml(branchName)}</span>
+            </div>
+            <div id="accordion-${p.id}" class="hidden px-4 pb-4 space-y-3 border-t border-white/5">
+                <p class="text-xs text-slate-400 whitespace-pre-wrap leading-relaxed pt-3">${escapeHtml(descPreview)}${p.descricao && p.descricao.length > 200 ? '...' : ''}</p>
+                <button onclick="openDetails('${p.id}')" class="flex items-center gap-1.5 text-xs font-bold text-accent-purple hover:text-accent-fuchsia transition">
+                    <i data-lucide="external-link" class="h-3.5 w-3.5"></i> Abrir Fluxo Completo
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+    lucide.createIcons();
+}
+
+function toggleAccordion(projectId) {
+    const body = document.getElementById(`accordion-${projectId}`);
+    const icon = document.getElementById(`acc-icon-${projectId}`);
+    if (!body) return;
+
+    const isOpen = !body.classList.contains("hidden");
+    body.classList.toggle("hidden", isOpen);
+    if (icon) {
+        icon.style.transform = isOpen ? '' : 'rotate(90deg)';
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 6: SOLICITATIONS FILTER SYSTEM
+// ─────────────────────────────────────────────────────────────────────────────
+
+function renderSolicitacoesFiltered() {
+    const container = document.getElementById("solicitacoes-container");
+    if (!container) return;
+
+    const statusFilter = document.getElementById("filter-sol-status")?.value || '';
+    const filialFilter = document.getElementById("filter-sol-filial")?.value || '';
+    const ordemFilter = document.getElementById("filter-sol-ordem")?.value || 'recente';
+
+    let visibleRequests = [...solicitacoes];
+
+    // Colaborador restriction
+    if (currentUser && currentUser.role === 'Colaborador') {
+        const allowedBranchIds = userFiliais
+            .filter(uf => uf.id_usuario === currentUser.id)
+            .map(uf => uf.id_filial);
+        visibleRequests = visibleRequests.filter(s => allowedBranchIds.includes(s.id_filial));
+    }
+
+    if (statusFilter) visibleRequests = visibleRequests.filter(s => s.status === statusFilter);
+    if (filialFilter) visibleRequests = visibleRequests.filter(s => s.id_filial === filialFilter);
+
+    if (ordemFilter === 'recente') {
+        visibleRequests.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    } else if (ordemFilter === 'antigo') {
+        visibleRequests.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    } else if (ordemFilter === 'critica') {
+        const urgOrder = { 'Crítica': 0, 'Alta': 1, 'Média': 2, 'Baixa': 3 };
+        visibleRequests.sort((a, b) => (urgOrder[a.urgencia] ?? 4) - (urgOrder[b.urgencia] ?? 4));
+    }
+
+    // Populate filial filter dropdown (first run)
+    const filialSel = document.getElementById("filter-sol-filial");
+    if (filialSel && filialSel.options.length <= 1) {
+        branches.forEach(b => {
+            const opt = document.createElement("option");
+            opt.value = b.id;
+            opt.textContent = b.nome;
+            filialSel.appendChild(opt);
+        });
+    }
+
+    container.innerHTML = '';
+    if (visibleRequests.length === 0) {
+        container.innerHTML = `<div class="col-span-full flex flex-col items-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-2xl">
+            <i data-lucide="inbox" class="h-8 w-8 mb-2 opacity-40"></i>
+            <span class="text-sm font-semibold">Nenhuma solicitação encontrada</span>
+        </div>`;
+    } else {
+        visibleRequests.forEach(req => container.appendChild(createRequestCardDOM(req)));
+    }
+    updateSolicitacoesBadge();
+    lucide.createIcons();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 5: PDF EXPORT (jsPDF + AutoTable + Canvas compression)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function openPdfModal() {
+    const container = document.getElementById("pdf-filial-checkboxes");
+    if (!container) return;
+
+    container.innerHTML = `
+    <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-200 py-1">
+        <input type="checkbox" id="pdf-check-all" checked onchange="toggleAllPdfFiliais(this.checked)"
+               class="rounded accent-violet-500">
+        <span class="font-bold">Todas as Filiais + Estoque Central</span>
+    </label>
+    <hr class="border-white/10 my-2">
+    ${branches.map(b => `
+        <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300 py-1">
+            <input type="checkbox" class="pdf-filial-check rounded accent-violet-500" value="${b.id}" checked>
+            <span>${escapeHtml(b.nome)} — ${escapeHtml(b.cidade || '')}</span>
+        </label>
+    `).join('')}`;
+
+    const modal = document.getElementById("modal-pdf-options");
+    if (modal) modal.classList.remove("hidden");
+    lucide.createIcons();
+}
+
+function closePdfModal() {
+    const modal = document.getElementById("modal-pdf-options");
+    if (modal) modal.classList.add("hidden");
+}
+
+function toggleAllPdfFiliais(checked) {
+    document.querySelectorAll('.pdf-filial-check').forEach(cb => { cb.checked = checked; });
+}
+
+async function compressImageToBase64(url, maxW = 60, maxH = 60) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ratio = Math.min(maxW / img.width, maxH / img.height, 1);
+            canvas.width = img.width * ratio;
+            canvas.height = img.height * ratio;
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.6));
+        };
+        img.onerror = () => resolve(null);
+        img.src = url;
+    });
+}
+
+async function generateInventoryPDF() {
+    const btn = document.querySelector("#modal-pdf-options button[onclick='generateInventoryPDF()']");
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="animate-spin">⏳</span> Gerando...'; }
+
+    try {
+        const checkedFiliais = Array.from(document.querySelectorAll('.pdf-filial-check:checked')).map(cb => cb.value);
+        let filteredAssets = assets.filter(a => {
+            if (!a.id_filial_atual) return true; // Estoque Central
+            return checkedFiliais.includes(a.id_filial_atual);
+        });
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+        // Header
+        doc.setFillColor(8, 8, 20);
+        doc.rect(0, 0, doc.internal.pageSize.width, 50, 'F');
+        doc.setTextColor(200, 180, 255);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('AlemaozinhoSystem32 — Relatório de Inventário', 40, 32);
+        doc.setFontSize(9);
+        doc.setTextColor(140, 130, 170);
+        doc.text(new Date().toLocaleString('pt-BR'), doc.internal.pageSize.width - 40, 32, { align: 'right' });
+
+        const tableBody = [];
+        for (const a of filteredAssets) {
+            const branch = branches.find(b => b.id === a.id_filial_atual);
+            const branchName = branch ? branch.nome : 'Estoque Central';
+            let imgData = null;
+            if (a.url_foto) {
+                imgData = await compressImageToBase64(a.url_foto);
+            }
+            tableBody.push([
+                a.codigo_patrimonio_ou_tag || '—',
+                a.categoria || '—',
+                a.marca_modelo || '—',
+                a.setor || '—',
+                a.status || '—',
+                branchName,
+                imgData ? { content: '', styles: { minCellWidth: 50 }, _imgData: imgData } : '—'
+            ]);
+        }
+
+        doc.autoTable({
+            startY: 60,
+            head: [['Patrimônio', 'Categoria', 'Marca/Modelo', 'Setor', 'Status', 'Localidade', 'Foto']],
+            body: tableBody,
+            styles: { 
+                fontSize: 8, 
+                cellPadding: 5, 
+                textColor: [220, 215, 235], 
+                fillColor: [12, 12, 25],
+                valign: 'middle',
+                halign: 'center'
+            },
+            headStyles: { fillColor: [50, 20, 90], textColor: [200, 180, 255], fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [18, 18, 30] },
+            theme: 'grid',
+            margin: { left: 30, right: 30 },
+            bodyStyles: {
+                minCellHeight: 35
+            },
+            didDrawCell: function(data) {
+                if (data.column.index === 6 && data.cell.section === 'body') {
+                    const rawData = data.row.raw[6];
+                    if (rawData && rawData._imgData) {
+                        const dim = 24; // size of image in pt
+                        const x = data.cell.x + (data.cell.width - dim) / 2;
+                        const y = data.cell.y + (data.cell.height - dim) / 2;
+                        try {
+                            doc.addImage(rawData._imgData, 'JPEG', x, y, dim, dim);
+                        } catch (e) {
+                            console.error('Error rendering image in PDF cell:', e);
+                        }
+                    }
+                }
+            }
+        });
+
+        const filename = `inventario_${new Date().toISOString().slice(0,10)}.pdf`;
+        doc.save(filename);
+        showToast(`Relatório PDF gerado: ${filename}`, 'success');
+        closePdfModal();
+    } catch (err) {
+        showToast('Erro ao gerar PDF: ' + err.message, 'error');
+        console.error(err);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="download" class="h-4 w-4"></i> Gerar PDF'; lucide.createIcons(); }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 8: IMGUR UPLOAD & COMPRESSION
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function compressImageBlob(file, maxSide = 1020, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                if (width > height) {
+                    if (width > maxSide) { height = Math.round((height * maxSide) / width); width = maxSide; }
+                } else {
+                    if (height > maxSide) { width = Math.round((width * maxSide) / height); height = maxSide; }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const compressedFile = new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
+                        resolve(compressedFile);
+                    } else { reject(new Error("Erro ao converter Canvas em Blob")); }
+                }, 'image/jpeg', quality);
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+    });
+}
+
+function updateHardwareUploadStatus(state) {
+    const statusDiv = document.getElementById("hard-foto-upload-status");
+    const contentDiv = document.getElementById("hard-foto-status-content");
+    const actionsDiv = document.getElementById("hard-foto-status-actions");
+    if (!statusDiv || !contentDiv || !actionsDiv) return;
+
+    statusDiv.className = "mt-2.5 p-3 rounded-xl text-xs flex items-center justify-between border backdrop-blur-md";
+    statusDiv.classList.remove("hidden");
+
+    if (state === 'uploading') {
+        isHardwarePhotoUploading = true;
+        hardwarePhotoUploadFailed = false;
+        statusDiv.classList.add("bg-amber-950/20", "border-amber-500/30", "text-amber-200");
+        contentDiv.innerHTML = `
+            <i data-lucide="loader" class="h-4 w-4 animate-spin text-amber-400"></i>
+            <span>Comprimindo e enviando imagem...</span>
+        `;
+        actionsDiv.innerHTML = ``;
+    } else if (state === 'success') {
+        isHardwarePhotoUploading = false;
+        hardwarePhotoUploadFailed = false;
+        statusDiv.classList.add("bg-emerald-950/20", "border-emerald-500/30", "text-emerald-200");
+        contentDiv.innerHTML = `
+            <i data-lucide="check-circle" class="h-4 w-4 text-emerald-400"></i>
+            <span>Foto carregada com sucesso!</span>
+        `;
+        actionsDiv.innerHTML = `
+            <button type="button" onclick="removeHardFoto()" class="text-emerald-400 hover:text-emerald-300 font-bold transition">
+                Remover
+            </button>
+        `;
+    } else if (state === 'failed') {
+        isHardwarePhotoUploading = false;
+        hardwarePhotoUploadFailed = true;
+        statusDiv.classList.add("bg-rose-950/20", "border-rose-500/30", "text-rose-200");
+        contentDiv.innerHTML = `
+            <i data-lucide="alert-circle" class="h-4 w-4 text-rose-400"></i>
+            <span>Falha no envio da foto.</span>
+        `;
+        actionsDiv.innerHTML = `
+            <button type="button" onclick="retryHardwarePhotoUpload()" class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/30 px-2 py-1 rounded-lg transition mr-1">
+                Tentar novamente
+            </button>
+            <button type="button" onclick="clearHardwarePhotoFailedState()" class="text-slate-400 hover:text-slate-200 font-medium transition">
+                Limpar
+            </button>
+        `;
+    } else {
+        isHardwarePhotoUploading = false;
+        hardwarePhotoUploadFailed = false;
+        statusDiv.classList.add("hidden");
+    }
+    lucide.createIcons();
+}
+
+async function uploadToImgur(file) {
+    if (!file) return null;
+    if (IMGUR_CLIENT_ID === 'YOUR_IMGUR_CLIENT_ID') {
+        showToast('Configure o IMGUR_CLIENT_ID em app.js para usar upload de imagens.', 'warning');
+        return null;
+    }
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+        const resp = await fetch('https://api.imgur.com/3/image', {
+            method: 'POST',
+            headers: { Authorization: `Client-ID ${IMGUR_CLIENT_ID}` },
+            body: formData
+        });
+        const data = await resp.json();
+        if (data.success) return data.data.link;
+        throw new Error(data.data?.error || 'Imgur upload failed');
+    } catch (e) {
+        showToast('Falha no upload Imgur: ' + e.message, 'error');
+        return null;
+    }
+}
+
+async function processAndUploadHardwarePhoto(file) {
+    updateHardwareUploadStatus('uploading');
+    try {
+        const compressed = await compressImageBlob(file, 1020, 0.7);
+        const link = await uploadToImgur(compressed);
+        if (link) {
+            imgurTempUrl = link;
+            updateHardwareUploadStatus('success');
+            
+            const previewContainer = document.getElementById("hard-foto-preview-container");
+            const previewImg = document.getElementById("hard-foto-preview");
+            if (previewContainer && previewImg) {
+                previewImg.src = link;
+                previewContainer.classList.remove("hidden");
+            }
+            
+            const fileLabel = document.getElementById("hard-file-label");
+            if (fileLabel) fileLabel.textContent = "Alterar Foto";
+        } else {
+            throw new Error("Retorno nulo da API Imgur");
+        }
+    } catch (err) {
+        console.error("processAndUploadHardwarePhoto failed:", err);
+        updateHardwareUploadStatus('failed');
+    }
+}
+
+async function handleHardwarePhotoSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    selectedHardwareFile = file;
+    await processAndUploadHardwarePhoto(file);
+}
+
+async function retryHardwarePhotoUpload() {
+    if (selectedHardwareFile) {
+        await processAndUploadHardwarePhoto(selectedHardwareFile);
+    } else {
+        clearHardwarePhotoFailedState();
+    }
+}
+
+function clearHardwarePhotoFailedState() {
+    selectedHardwareFile = null;
+    hardwarePhotoUploadFailed = false;
+    isHardwarePhotoUploading = false;
+    
+    const hardFotoInput = document.getElementById("hard-foto");
+    if (hardFotoInput) hardFotoInput.value = "";
+    
+    const fileLabel = document.getElementById("hard-file-label");
+    if (fileLabel) fileLabel.textContent = "Selecionar Foto";
+    
+    updateHardwareUploadStatus('idle');
+}
+
+function removeHardFoto() {
+    imgurTempUrl = null;
+    selectedHardwareFile = null;
+    hardwarePhotoUploadFailed = false;
+    isHardwarePhotoUploading = false;
+    
+    const hardFotoInput = document.getElementById("hard-foto");
+    if (hardFotoInput) hardFotoInput.value = "";
+    
+    const previewContainer = document.getElementById("hard-foto-preview-container");
+    if (previewContainer) previewContainer.classList.add("hidden");
+    
+    const fileLabel = document.getElementById("hard-file-label");
+    if (fileLabel) fileLabel.textContent = "Selecionar Foto";
+    
+    updateHardwareUploadStatus('idle');
+}
+
+// Intercept hardware photo input
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        const hardFoto = document.getElementById('hard-foto');
+        if (hardFoto) {
+            hardFoto.addEventListener('change', handleHardwarePhotoSelect);
+        }
+    }, 2000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 9: BLOCKED USER AUDIT
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function auditUserBeforeBlock(userId, userName) {
+    if (!db) return;
+    try {
+        const snap = await db.collection("inventario_ativos")
+            .where("id_usuario_instalador", "==", userId)
+            .where("status", "!=", "Sucata")
+            .get();
+
+        const linkedAssets = [];
+        snap.forEach(doc => linkedAssets.push({ id: doc.id, ...doc.data() }));
+
+        pendingBlockUserId = userId;
+
+        const subtitle = document.getElementById("audit-block-subtitle");
+        const assetsList = document.getElementById("audit-block-assets");
+        const modal = document.getElementById("modal-audit-block");
+
+        if (subtitle) subtitle.textContent = `Equipamentos instalados por: ${userName}`;
+
+        if (assetsList) {
+            if (linkedAssets.length === 0) {
+                assetsList.innerHTML = `<p class="text-emerald-400 text-center py-2">✅ Nenhum equipamento ativo vinculado a este usuário.</p>`;
+            } else {
+                assetsList.innerHTML = linkedAssets.map(a => `
+                <div class="flex items-center gap-2 p-2 rounded-lg bg-rose-950/30 border border-rose-500/20">
+                    <i data-lucide="monitor" class="h-4 w-4 text-rose-400 flex-shrink-0"></i>
+                    <div>
+                        <p class="font-semibold text-slate-200">${escapeHtml(a.marca_modelo || 'Equipamento')}</p>
+                        <p class="text-[10px] text-slate-400">${escapeHtml(a.codigo_patrimonio_ou_tag || '')} — Status: ${escapeHtml(a.status || '')}</p>
+                    </div>
+                </div>`).join('');
+            }
+        }
+        if (modal) modal.classList.remove("hidden");
+        lucide.createIcons();
+    } catch (e) {
+        showToast('Erro na auditoria: ' + e.message, 'error');
+        console.error(e);
+    }
+}
+
+function closeAuditBlockModal() {
+    const modal = document.getElementById("modal-audit-block");
+    if (modal) modal.classList.add("hidden");
+    pendingBlockUserId = null;
+}
+
+async function confirmBlockUser() {
+    if (!pendingBlockUserId || !db) return;
+    try {
+        await db.collection("perfis").doc(pendingBlockUserId).update({
+            aprovado: false,
+            bloqueado: true
+        });
+        showToast("Usuário bloqueado com sucesso.", "success");
+        closeAuditBlockModal();
+        renderAdminPanel();
+    } catch (e) {
+        showToast("Erro ao bloquear: " + e.message, "error");
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MONKEY PATCHES VIA REASSIGNMENT TO PREVENT HOISTING RECURSION
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _originalQuickRelease = quickReleaseUserAccess;
+quickReleaseUserAccess = async function(userId, userName) {
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem alterar acessos.", "error");
+        return;
+    }
+    const profile = profiles.find(p => p.id === userId);
+    if (profile && profile.aprovado) {
+        await auditUserBeforeBlock(userId, userName);
+    } else {
+        if (!confirm(`Liberar acesso para ${userName}?`)) return;
+        try {
+            await db.collection("perfis").doc(userId).update({ aprovado: true, bloqueado: false });
+            showToast(`Acesso liberado para ${userName}!`, "success");
+            await loadData();
+            renderAdminPanel();
+        } catch (e) {
+            showToast("Erro ao liberar acesso: " + e.message, "error");
+        }
+    }
+};
+
+const _originalHandleHardwareSubmit = handleHardwareSubmit;
+handleHardwareSubmit = async function(e) {
+    e.preventDefault();
+
+    if (isHardwarePhotoUploading) {
+        showToast("Por favor, aguarde o upload da foto ser concluído antes de salvar.", "warning");
+        return;
+    }
+    if (hardwarePhotoUploadFailed) {
+        showToast("O upload da foto falhou. Tente novamente ou limpe o status de upload antes de salvar.", "warning");
+        return;
+    }
+
+    const tagInput = document.getElementById("hard-tag");
+    if (tagInput && !tagInput.value.trim()) {
+        showToast("Gerando código de patrimônio...", "info");
+        tagInput.value = await generatePatrimonioCode();
+    }
+
+    const setor = document.getElementById("hard-setor")?.value.trim() || '';
+
+    window._pendingSetor = setor;
+    window._pendingImgurUrl = imgurTempUrl;
+
+    await _originalHandleHardwareSubmit(e);
+
+    imgurTempUrl = null;
+    window._pendingSetor = '';
+    window._pendingImgurUrl = null;
+    
+    removeHardFoto();
+};
+
+const _origHandleCommentSubmit = handleCommentSubmit;
+handleCommentSubmit = async function(e) {
+    await _origHandleCommentSubmit(e);
+    if (currentProjectId && currentUser) {
+        const proj = projects.find(p => p.id === currentProjectId);
+        const msg = `💬 ${currentUser.nome} comentou no projeto "${proj ? proj.titulo : 'sem título'}"`;
+        await sendNotification(currentProjectId, 'comentario', msg, currentUser.id);
+    }
+};
+
+const _originalDrop = drop;
+drop = async function(e, newStatus) {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain");
+    if (!id) return;
+    try {
+        await db.collection("projetos").doc(id).update({
+            status: newStatus,
+            updated_at: new Date().toISOString()
+        });
+        showToast(`Projeto movido para '${newStatus}'!`, "success");
+        if (currentUser) {
+            const msg = `📋 Projeto movido para "${newStatus}" por ${currentUser.nome}`;
+            await sendNotification(id, 'status', msg, currentUser.id);
+        }
+    } catch (error) {
+        showToast("Erro ao mover projeto: " + error.message, "error");
+    }
+};
+
+const _originalMoveCurrentProject = moveCurrentProject;
+moveCurrentProject = async function(newStatus) {
+    if (!currentProjectId) return;
+    try {
+        await db.collection("projetos").doc(currentProjectId).update({
+            status: newStatus,
+            updated_at: new Date().toISOString()
+        });
+        showToast(`Status alterado para '${newStatus}'!`, "success");
+        if (currentUser) {
+            const proj = projects.find(p => p.id === currentProjectId);
+            const msg = `📋 "${proj ? proj.titulo : 'Projeto'}" movido para "${newStatus}" por ${currentUser.nome}`;
+            await sendNotification(currentProjectId, 'status', msg, currentUser.id);
+        }
+        closeDetailsModal();
+    } catch (e) {
+        showToast("Erro ao mover status: " + e.message, "error");
+    }
+};
+
+const _origHandleAuthSessionExt = handleAuthSession;
+handleAuthSession = async function(user) {
+    cleanupListeners();
+    await _origHandleAuthSessionExt(user);
+    if (user && currentUser) {
+        initRealtimeListeners();
+        initNotificationsListener();
+
+        const kanban = document.getElementById("board-kanban-view");
+        const list = document.getElementById("board-list-view");
+        const icon = document.getElementById("toggle-view-icon");
+        const text = document.getElementById("toggle-view-text");
+        if (boardView === 'list') {
+            if (kanban) kanban.classList.add("hidden");
+            if (list) list.classList.remove("hidden");
+            if (icon) icon.setAttribute("data-lucide", "layout-dashboard");
+            if (text) text.textContent = "Modo Kanban";
+        }
+    } else {
+        const wrapper = document.getElementById("notif-wrapper");
+        if (wrapper) wrapper.classList.add("hidden");
+    }
+};
+
+const _origHandleLogout = handleLogout;
+handleLogout = async function() {
+    cleanupListeners();
+    await _origHandleLogout();
+};
+
+const _origRenderBoard = renderBoard;
+renderBoard = function() {
+    _origRenderBoard();
+    if (boardView === 'list') {
+        renderBoardList();
+    }
+};
+
+const _origLoadRequests = loadRequests;
+loadRequests = async function() {
+    await _origLoadRequests();
+    const filialSel = document.getElementById("filter-sol-filial");
+    if (filialSel && filialSel.options.length <= 1) {
+        branches.forEach(b => {
+            const opt = document.createElement("option");
+            opt.value = b.id;
+            opt.textContent = b.nome;
+            filialSel.appendChild(opt);
+        });
+    }
+};
+
+const _origSwitchTab = switchTab;
+switchTab = function(tabId) {
+    _origSwitchTab(tabId);
+    if (tabId === 'solicitacoes') {
+        setTimeout(() => renderSolicitacoesFiltered(), 100);
+    }
+};
+
+const _origCloseHardwareAssetModal = closeHardwareAssetModal;
+closeHardwareAssetModal = function() {
+    _origCloseHardwareAssetModal();
+    clearHardwarePhotoFailedState();
+    removeHardFoto();
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PWA: Service Worker Registration
+// ─────────────────────────────────────────────────────────────────────────────
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+}
+
+console.log('[AlemaozinhoSystem32 v2.0] Feature extensions loaded successfully.');

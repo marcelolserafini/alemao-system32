@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AlemaozinhoSystem32 - Gestão de Projetos Inteligente</title>
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#030712">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AlemaozinhoSys">
+    <link rel="apple-touch-icon" href="icon-192.svg">
     
     <!-- Google Fonts: Inter & Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,6 +52,13 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+
+    <!-- CryptoJS: Client-side credential encryption -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+
+    <!-- jsPDF + AutoTable: PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     
     <style>
         body {
@@ -535,6 +550,25 @@
                     </button>
                 </div>
 
+                <!-- 🔔 Central de Notificações -->
+                <div id="notif-wrapper" class="relative hidden">
+                    <button id="btn-notifications" onclick="toggleNotifPanel()" class="relative flex items-center justify-center h-9 w-9 rounded-xl glass hover:bg-slate-800 border border-white/5 transition duration-200 text-slate-400 hover:text-white" title="Notificações">
+                        <i data-lucide="bell" class="h-4 w-4"></i>
+                        <span id="notifications-badge" class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-rose-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-rose-600/30 animate-pulse">0</span>
+                    </button>
+                    <!-- Dropdown Panel -->
+                    <div id="notifications-panel" class="hidden absolute right-0 top-12 w-80 glass border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                        <div class="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                            <span class="text-xs font-bold text-slate-200 uppercase tracking-wider">Notificações</span>
+                            <button onclick="markAllNotifsRead()" class="text-[10px] font-semibold text-accent-purple hover:text-accent-fuchsia transition">Marcar todas lidas</button>
+                        </div>
+                        <div id="notifications-list" class="max-h-80 overflow-y-auto divide-y divide-white/5">
+                            <p class="text-xs text-slate-500 italic text-center py-6">Sem notificações</p>
+                        </div>
+                    </div>
+                </div>
+
+
                 <!-- Botão de Alternância de Tema -->
                 <button id="theme-toggle" onclick="toggleTheme()" class="flex items-center justify-center h-10 w-10 rounded-xl glass hover:bg-slate-900 border border-white/5 transition duration-300 text-slate-400 hover:text-white" title="Alternar Tema">
                     <i data-lucide="sun" class="h-5 w-5" id="theme-sun-icon"></i>
@@ -652,8 +686,16 @@
                 </div>
             </div>
 
-            <!-- Pipeline Kanban Board -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+            <!-- View Toggle -->
+            <div class="flex items-center justify-between">
+                <span class="text-xs text-slate-500 font-semibold">Visualização do Pipeline</span>
+                <button id="btn-toggle-view" onclick="toggleBoardView()" class="flex items-center gap-2 px-3 py-1.5 rounded-xl glass hover:bg-slate-800 border border-white/5 transition text-xs font-bold text-slate-400 hover:text-white">
+                    <i data-lucide="list" class="h-4 w-4" id="toggle-view-icon"></i>
+                    <span id="toggle-view-text">Modo Lista</span>
+                </button>
+            </div>
+
+            <div id="board-kanban-view" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
                 
                 <!-- Column 1: Banco de Ideias -->
                 <div class="flex flex-col h-full rounded-2xl glass border-slate-800/60 p-4 min-h-[500px]">
@@ -712,12 +754,18 @@
                 </div>
 
             </div>
+
+            <!-- List View (accordion mode) -->
+            <div id="board-list-view" class="hidden space-y-2">
+                <!-- Injected via JS renderBoardList() -->
+            </div>
+
         </section>
 
         <!-- SECTION 2: ESTEIRA DE SOLICITAÇÕES (NOVO) -->
         <section id="view-solicitacoes" class="space-y-6 hidden">
             <div class="glass rounded-2xl p-6 border border-white/5 shadow-xl">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                     <div>
                         <h2 class="font-outfit font-extrabold text-2xl text-white">Esteira de Solicitações</h2>
                         <p class="text-xs text-slate-400 mt-1">Acompanhe e faça a triagem de novos chamados e serviços locais</p>
@@ -726,7 +774,43 @@
                         <i data-lucide="plus-circle" class="h-4 w-4"></i> Novo Pedido
                     </button>
                 </div>
-                
+
+                <!-- Filter bar for solicitações -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="activity" class="h-4 w-4"></i>
+                        </span>
+                        <select id="filter-sol-status" onchange="renderSolicitacoesFiltered()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                            <option value="">Status: Todos</option>
+                            <option value="Aguardando Triagem">Aguardando Triagem</option>
+                            <option value="Aprovada">Aprovada</option>
+                            <option value="Rejeitada">Rejeitada</option>
+                            <option value="Em Execução">Em Execução</option>
+                            <option value="Concluída">Concluída</option>
+                        </select>
+                    </div>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="building" class="h-4 w-4"></i>
+                        </span>
+                        <select id="filter-sol-filial" onchange="renderSolicitacoesFiltered()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                            <option value="">Filial: Todas</option>
+                            <!-- Populado via JS -->
+                        </select>
+                    </div>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="arrow-up-down" class="h-4 w-4"></i>
+                        </span>
+                        <select id="filter-sol-ordem" onchange="renderSolicitacoesFiltered()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                            <option value="recente">Mais Recentes</option>
+                            <option value="antigo">Mais Antigas</option>
+                            <option value="critica">Urgência Crítica</option>
+                        </select>
+                    </div>
+                </div>
+
                 <!-- Grid of service requests -->
                 <div id="solicitacoes-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <!-- Injected dynamically via JS -->
@@ -808,9 +892,15 @@
                         <h2 class="font-outfit font-extrabold text-2xl text-white">Inventário Global de Ativos</h2>
                         <p class="text-xs text-slate-400 mt-1">Gerencie equipamentos de hardware, tags de patrimônio, marcas, modelos e distribuições pelas filiais</p>
                     </div>
-                    <button id="btn-create-hardware" onclick="openHardwareAssetModal()" class="hidden flex items-center space-x-1.5 text-xs font-bold px-4 py-2.5 bg-gradient-to-r from-accent-purple to-accent-fuchsia hover:opacity-90 rounded-xl shadow shadow-accent-purple/10 transition">
-                        <i data-lucide="plus-circle" class="h-4 w-4"></i> Novo Equipamento
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button id="btn-exportar-pdf" onclick="openPdfModal()" class="flex items-center space-x-1.5 text-xs font-bold px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition">
+                            <i data-lucide="file-down" class="h-4 w-4 text-accent-purple"></i>
+                            <span>Exportar PDF</span>
+                        </button>
+                        <button id="btn-create-hardware" onclick="openHardwareAssetModal()" class="hidden flex items-center space-x-1.5 text-xs font-bold px-4 py-2.5 bg-gradient-to-r from-accent-purple to-accent-fuchsia hover:opacity-90 rounded-xl shadow shadow-accent-purple/10 transition">
+                            <i data-lucide="plus-circle" class="h-4 w-4"></i> Novo Equipamento
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Stats Grid -->
@@ -1152,7 +1242,7 @@
                 <!-- Descrição -->
                 <div>
                     <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Descrição</h4>
-                    <p id="details-descricao" class="text-sm text-slate-200 whitespace-pre-line leading-relaxed glass border-white/5 p-4 rounded-xl"></p>
+                    <p id="details-descricao" class="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed glass border-white/5 p-4 rounded-xl"></p>
                 </div>
 
                 <!-- Timestamps -->
@@ -1607,7 +1697,7 @@
                  <div class="grid grid-cols-2 gap-4">
                      <div>
                          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Código de Patrimônio / Tag *</label>
-                         <input type="text" id="hard-tag" required placeholder="Ex: PAT-02391" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                         <input type="text" id="hard-tag" placeholder="Deixe vazio para gerar automaticamente (PAT-YYYYMMDD-XXXX)" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
                      </div>
                      <div>
                          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Categoria *</label>
@@ -1634,15 +1724,14 @@
                      </div>
                  </div>
 
+                 <!-- Setor + Filial -->
                  <div class="grid grid-cols-2 gap-4">
                      <div>
-                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Status Inicial *</label>
-                         <select id="hard-status" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
-                             <option value="Disponível">Disponível (Estoque Central)</option>
-                             <option value="Em Uso">Em Uso</option>
-                             <option value="Manutenção">Manutenção</option>
-                             <option value="Sucata">Sucata</option>
-                         </select>
+                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Setor / Departamento</label>
+                         <input type="text" id="hard-setor" list="setor-datalist" placeholder="Ex: TI, Financeiro, RH..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple">
+                         <datalist id="setor-datalist">
+                             <option value="TI"><option value="Financeiro"><option value="RH"><option value="Recepção"><option value="Diretoria"><option value="Operações"><option value="Comercial"><option value="Logística">
+                         </datalist>
                      </div>
                      <div>
                          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Filial Atual</label>
@@ -1651,6 +1740,17 @@
                              <!-- Populado via JS -->
                          </select>
                      </div>
+                 </div>
+
+                 <!-- Status Inicial -->
+                 <div>
+                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Status Inicial *</label>
+                     <select id="hard-status" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-purple appearance-none">
+                         <option value="Disponível">Disponível (Estoque Central)</option>
+                         <option value="Em Uso">Em Uso</option>
+                         <option value="Manutenção">Manutenção</option>
+                         <option value="Sucata">Sucata</option>
+                     </select>
                  </div>
 
                  <div class="grid grid-cols-2 gap-4">
@@ -1679,6 +1779,28 @@
                      <p class="text-[11px] text-slate-400 leading-tight">
                          <i data-lucide="shield" class="inline h-3.5 w-3.5 text-accent-purple mr-1"></i> Apenas Admins e o instalador terão acesso à senha.
                      </p>
+                 </div>
+
+                 <!-- Foto do Hardware -->
+                 <div>
+                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Foto do Equipamento</label>
+                     <input type="file" id="hard-foto" accept="image/*" class="hidden">
+                     <label for="hard-foto" class="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 cursor-pointer text-slate-300 text-sm transition">
+                         <i data-lucide="camera" class="h-4 w-4 text-accent-fuchsia"></i>
+                         <span id="hard-file-label">Selecionar Foto</span>
+                     </label>
+                     <!-- Status de Upload da Foto -->
+                     <div id="hard-foto-upload-status" class="hidden mt-2.5 p-3 rounded-xl text-xs flex items-center justify-between border bg-slate-900/60 border-slate-800/80 backdrop-blur-md text-slate-300">
+                         <div class="flex items-center gap-2" id="hard-foto-status-content"></div>
+                         <div id="hard-foto-status-actions" class="flex gap-2"></div>
+                     </div>
+                 </div>
+
+                 <div id="hard-foto-preview-container" class="hidden w-full overflow-hidden rounded-xl border border-white/5 max-h-[160px] bg-slate-900/50 flex items-center justify-center relative">
+                     <img id="hard-foto-preview" src="" alt="Prévia do Equipamento" class="w-full h-full object-cover">
+                     <button type="button" onclick="removeHardFoto()" class="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-950/80 text-rose-400 hover:text-rose-500 transition">
+                         <i data-lucide="trash-2" class="h-4 w-4"></i>
+                     </button>
                  </div>
 
                  <div>
@@ -1726,6 +1848,61 @@
              </div>
          </div>
      </div>
+
+    <!-- MODAL: PDF Export Options -->
+    <div id="modal-pdf-options" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+        <div class="w-full max-w-md glass border-white/10 rounded-2xl p-6 shadow-2xl relative">
+            <button onclick="closePdfModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+            <div class="flex items-center gap-3 mb-5">
+                <div class="p-2.5 rounded-lg bg-accent-purple/20 text-accent-purple">
+                    <i data-lucide="file-text" class="h-6 w-6"></i>
+                </div>
+                <div>
+                    <h3 class="font-outfit font-bold text-lg text-white">Exportar Inventário PDF</h3>
+                    <p class="text-xs text-slate-400">Selecione as filiais a incluir no relatório</p>
+                </div>
+            </div>
+            <div id="pdf-filial-checkboxes" class="space-y-2 max-h-48 overflow-y-auto mb-5 p-3 bg-slate-900/60 rounded-xl border border-white/5">
+                <!-- Populado via JS -->
+            </div>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closePdfModal()" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition">Cancelar</button>
+                <button onclick="generateInventoryPDF()" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-accent-purple to-accent-fuchsia text-white transition hover:opacity-90">
+                    <i data-lucide="download" class="h-4 w-4"></i> Gerar PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Auditoria de Bloqueio de Usuário -->
+    <div id="modal-audit-block" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+        <div class="w-full max-w-md glass border-white/10 rounded-2xl p-6 shadow-2xl relative">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="p-2.5 rounded-lg bg-rose-500/20 text-rose-400">
+                    <i data-lucide="user-x" class="h-6 w-6"></i>
+                </div>
+                <div>
+                    <h3 class="font-outfit font-bold text-lg text-white">Auditar antes de Bloquear</h3>
+                    <p id="audit-block-subtitle" class="text-xs text-slate-400">Equipamentos vinculados a este usuário</p>
+                </div>
+            </div>
+            <div id="audit-block-assets" class="space-y-2 max-h-52 overflow-y-auto mb-5 p-3 bg-slate-900/60 rounded-xl border border-white/5 text-xs text-slate-300">
+                <!-- Populado via JS -->
+            </div>
+            <p class="text-xs text-amber-400 mb-4 flex items-center gap-2">
+                <i data-lucide="alert-triangle" class="h-4 w-4 flex-shrink-0"></i>
+                Transferir ou reatribuir equipamentos antes de bloquear o usuário.
+            </p>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeAuditBlockModal()" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition">Cancelar</button>
+                <button id="btn-confirm-block" onclick="confirmBlockUser()" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition">
+                    <i data-lucide="user-x" class="h-4 w-4"></i> Bloquear Mesmo Assim
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Autenticação (Login / Cadastro) [Novo] -->
     <div id="modal-auth" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-xl">

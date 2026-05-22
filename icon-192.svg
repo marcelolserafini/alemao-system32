@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="192" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a0533"/>
+      <stop offset="100%" stop-color="#0d0d1e"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#d946ef"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="192" height="192" rx="36" fill="url(#bg)"/>
+  <!-- Server rack body -->
+  <rect x="44" y="40" width="104" height="112" rx="10" fill="#12102a" stroke="url(#glow)" stroke-width="2.5"/>
+  <!-- Rack units -->
+  <rect x="52" y="52" width="88" height="16" rx="4" fill="#1e1a3a" stroke="#8b5cf6" stroke-width="1"/>
+  <rect x="52" y="74" width="88" height="16" rx="4" fill="#1e1a3a" stroke="#8b5cf6" stroke-width="1"/>
+  <rect x="52" y="96" width="88" height="16" rx="4" fill="#1e1a3a" stroke="#8b5cf6" stroke-width="1"/>
+  <rect x="52" y="118" width="88" height="16" rx="4" fill="#1e1a3a" stroke="#d946ef" stroke-width="1.5"/>
+  <!-- LED indicators -->
+  <circle cx="66" cy="60" r="3.5" fill="#10b981"/>
+  <circle cx="66" cy="82" r="3.5" fill="#10b981"/>
+  <circle cx="66" cy="104" r="3.5" fill="#f59e0b" class="animate-pulse"/>
+  <circle cx="66" cy="126" r="3.5" fill="#d946ef"/>
+  <!-- Drive slots -->
+  <rect x="76" y="55" width="56" height="10" rx="2" fill="#0d0b1c"/>
+  <rect x="76" y="77" width="56" height="10" rx="2" fill="#0d0b1c"/>
+  <rect x="76" y="99" width="56" height="10" rx="2" fill="#0d0b1c"/>
+  <rect x="76" y="121" width="56" height="10" rx="2" fill="#0d0b1c"/>
+  <!-- Pulse ring around last unit -->
+  <rect x="52" y="118" width="88" height="16" rx="4" fill="none" stroke="#d946ef" stroke-width="0.8" opacity="0.4"/>
+  <!-- Bottom label -->
+  <text x="96" y="170" font-family="monospace" font-size="10" fill="#6b5c9a" text-anchor="middle" font-weight="bold">SYSTEM32</text>
+</svg>
