@@ -47,7 +47,7 @@ self.addEventListener('activate', (event) => {
 // Fetch Event with Stale-While-Revalidate pattern for local and cache-first for fonts/CDNs
 self.addEventListener('fetch', (event) => {
   // Skip non-GET requests or Firebase Firestore calls
-  if (event.request.method !== 'GET' || event.request.url.includes('firestore.googleapis.com') || event.request.url.includes('identitytoolkit.googleapis.com') || event.request.url.includes('api.imgur.com')) {
+  if (event.request.method !== 'GET' || event.request.url.includes('firestore.googleapis.com') || event.request.url.includes('identitytoolkit.googleapis.com') || event.request.url.includes('api.imgbb.com')) {
     return;
   }
 

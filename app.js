@@ -92,6 +92,7 @@ function initFirebase() {
             const storageBucketInput = document.getElementById("fb-storage-bucket");
             const senderIdInput = document.getElementById("fb-messaging-sender-id");
             const appIdInput = document.getElementById("fb-app-id");
+            const imgbbApiKeyInput = document.getElementById("imgbb-api-key");
 
             if (apiKeyInput) apiKeyInput.value = apiKey;
             if (authDomainInput) authDomainInput.value = authDomain;
@@ -99,6 +100,7 @@ function initFirebase() {
             if (storageBucketInput) storageBucketInput.value = storageBucket;
             if (senderIdInput) senderIdInput.value = messagingSenderId || "";
             if (appIdInput) appIdInput.value = appId;
+            if (imgbbApiKeyInput) imgbbApiKeyInput.value = localStorage.getItem("imgbb_api_key") || "";
 
             // Escutar eventos de autenticação em tempo real do Firebase Auth
             auth.onAuthStateChanged(async (user) => {
@@ -146,6 +148,7 @@ function saveFirebaseSettings() {
     const storageBucket = document.getElementById("fb-storage-bucket").value.trim();
     const messagingSenderId = document.getElementById("fb-messaging-sender-id").value.trim();
     const appId = document.getElementById("fb-app-id").value.trim();
+    const imgbbApiKey = document.getElementById("imgbb-api-key") ? document.getElementById("imgbb-api-key").value.trim() : "";
 
     if (!apiKey || !authDomain || !projectId || !storageBucket || !appId) {
         showToast("Por favor, preencha todos os campos obrigatórios (*).", "warning");
@@ -158,6 +161,7 @@ function saveFirebaseSettings() {
     localStorage.setItem("fb_storage_bucket", storageBucket);
     localStorage.setItem("fb_messaging_sender_id", messagingSenderId);
     localStorage.setItem("fb_app_id", appId);
+    localStorage.setItem("imgbb_api_key", imgbbApiKey);
 
     closeSettingsModal();
     showToast("Configurações salvas! Conectando...", "info");
@@ -175,6 +179,7 @@ function disconnectFirebase() {
         localStorage.removeItem("fb_storage_bucket");
         localStorage.removeItem("fb_messaging_sender_id");
         localStorage.removeItem("fb_app_id");
+        localStorage.removeItem("imgbb_api_key");
         
         sessionStorage.clear();
         
@@ -731,13 +736,34 @@ function closeSettingsModal() {
     if (modal) modal.classList.add("hidden");
 }
 
-function openFilialModal() {
+function openFilialModal(branchId = null) {
     if (!currentUser || currentUser.role !== 'Administrador') {
-        showToast("Acesso Negado: Apenas Administradores podem cadastrar filiais.", "error");
+        showToast("Acesso Negado: Apenas Administradores podem gerenciar filiais.", "error");
         return;
     }
     const form = document.getElementById("filial-form");
     if (form) form.reset();
+
+    const titleEl = document.getElementById("modal-filial-title");
+    const idInput = document.getElementById("fil-id");
+    const prefixInput = document.getElementById("fil-prefixo");
+
+    if (branchId) {
+        if (titleEl) titleEl.textContent = "Editar Filial";
+        const b = branches.find(item => item.id === branchId);
+        if (b) {
+            if (idInput) idInput.value = b.id;
+            document.getElementById("fil-nome").value = b.nome || "";
+            document.getElementById("fil-cidade").value = b.cidade || "";
+            document.getElementById("fil-estado").value = b.estado || "";
+            if (prefixInput) prefixInput.value = b.prefixo || "";
+        }
+    } else {
+        if (titleEl) titleEl.textContent = "Cadastrar Filial";
+        if (idInput) idInput.value = "";
+        if (prefixInput) prefixInput.value = "";
+    }
+
     const modal = document.getElementById("modal-filial");
     if (modal) modal.classList.remove("hidden");
 }
@@ -750,30 +776,52 @@ function closeFilialModal() {
 async function handleFilialSubmit(e) {
     e.preventDefault();
     if (!currentUser || currentUser.role !== 'Administrador') {
-        showToast("Acesso Negado: Apenas Administradores podem cadastrar filiais.", "error");
+        showToast("Acesso Negado: Apenas Administradores podem gerenciar filiais.", "error");
         return;
     }
+    const id = document.getElementById("fil-id").value;
     const nome = document.getElementById("fil-nome").value.trim();
     const cidade = document.getElementById("fil-cidade").value.trim();
     const estado = document.getElementById("fil-estado").value.trim().toUpperCase();
+    let prefixo = document.getElementById("fil-prefixo").value.trim().toUpperCase();
+
+    // Clean prefix: only allow alphabetic A-Z, up to 4 characters
+    prefixo = prefixo.replace(/[^A-Z]/g, '').slice(0, 4);
+
+    if (prefixo.length > 0 && prefixo.length < 4) {
+        showToast("O prefixo de patrimônio deve conter exatamente 4 letras.", "error");
+        return;
+    }
 
     try {
-        const newBranchRef = db.collection("filiais").doc();
-        const payload = {
-            id: newBranchRef.id,
-            nome,
-            cidade,
-            estado,
-            created_at: new Date().toISOString()
-        };
-        await newBranchRef.set(payload);
+        if (id) {
+            await db.collection("filiais").doc(id).update({
+                nome,
+                cidade,
+                estado,
+                prefixo
+            });
+            showToast("Filial atualizada com sucesso!", "success");
+        } else {
+            const newBranchRef = db.collection("filiais").doc();
+            const payload = {
+                id: newBranchRef.id,
+                nome,
+                cidade,
+                estado,
+                prefixo,
+                created_at: new Date().toISOString()
+            };
+            await newBranchRef.set(payload);
+            showToast("Filial cadastrada com sucesso!", "success");
+        }
 
-        showToast("Filial cadastrada com sucesso!", "success");
         closeFilialModal();
         await loadData();
+        renderAdminPanel();
 
     } catch (error) {
-        showToast("Erro ao cadastrar filial: " + error.message, "error");
+        showToast("Erro ao salvar filial: " + error.message, "error");
     }
 }
 
@@ -2246,10 +2294,51 @@ function renderAdminPanel() {
 
     lucide.createIcons();
     
+    // Render Admin Branches
+    renderAdminBranches();
+    
     // Refresh Central de Senhas Admin
     loadAdminPasswordCentral().catch(err => {
         console.error("Erro ao carregar central de senhas admin:", err);
     });
+}
+
+function renderAdminBranches() {
+    const listContainer = document.getElementById("admin-branches-list");
+    if (!listContainer) return;
+    listContainer.innerHTML = "";
+
+    if (branches.length === 0) {
+        listContainer.innerHTML = `
+            <tr>
+                <td colspan="4" class="px-6 py-8 text-center text-slate-500 italic">Nenhuma filial cadastrada.</td>
+            </tr>
+        `;
+        return;
+    }
+
+    branches.forEach(b => {
+        const prefixVal = b.prefixo 
+            ? `<span class="bg-cyan-950/40 text-accent-cyan border border-accent-cyan/10 px-2 py-0.5 rounded font-extrabold text-xs font-mono uppercase">${b.prefixo}</span>` 
+            : `<span class="text-slate-500 italic">Nenhum (Fallback: PATR)</span>`;
+            
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-white/[0.02] transition duration-150";
+        tr.innerHTML = `
+            <td class="px-6 py-4 font-semibold text-white">${b.nome || "Sem Nome"}</td>
+            <td class="px-6 py-4 text-slate-400">${b.cidade || ""}/${b.estado || ""}</td>
+            <td class="px-6 py-4">${prefixVal}</td>
+            <td class="px-6 py-4 text-right">
+                <button onclick="openFilialModal('${b.id}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/5 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm">
+                    <i data-lucide="edit" class="h-3.5 w-3.5"></i>
+                    <span>Editar</span>
+                </button>
+            </td>
+        `;
+        listContainer.appendChild(tr);
+    });
+
+    lucide.createIcons();
 }
 
 function openPermissionsModal(userId) {
@@ -3232,7 +3321,7 @@ function openHardwareAssetModal(assetId = null) {
 
             // Populate photo preview if it exists
             if (asset.url_foto) {
-                imgurTempUrl = asset.url_foto;
+                photoTempUrl = asset.url_foto;
                 const previewContainer = document.getElementById("hard-foto-preview-container");
                 const previewImg = document.getElementById("hard-foto-preview");
                 if (previewContainer) previewContainer.classList.remove("hidden");
@@ -3316,7 +3405,7 @@ async function handleHardwareSubmit(e) {
             usuario_acesso: login,
             senha_criptografada: finalSenhaCrip,
             setor: document.getElementById("hard-setor") ? document.getElementById("hard-setor").value.trim() : "",
-            url_foto: imgurTempUrl
+            url_foto: photoTempUrl
         };
 
         if (assetId) {
@@ -3900,8 +3989,11 @@ function applyInventoryFilters() {
 // CryptoJS encryption key
 const CRIPTO_KEY = "AleSystem2025@SecretKey#32";
 
-// Imgur API Client-ID
-const IMGUR_CLIENT_ID = "YOUR_IMGUR_CLIENT_ID";
+// ImgBB API Key
+let IMGBB_API_KEY = localStorage.getItem("imgbb_api_key") || "090c3671633fc37efc0b0f44445dcc4c";
+
+// Temporary photo URL state
+let photoTempUrl = null;
 
 // Notifications state
 let notifications = [];
@@ -4186,33 +4278,54 @@ function escapeHtml(str) {
 // FEATURE 3: AUTO PATRIMÔNIO CODE + SETOR FIELD
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function generatePatrimonioCode() {
-    if (!db) return `PAT-${Date.now()}`;
-    const today = new Date();
-    const datePart = today.toISOString().slice(0, 10).replace(/-/g, '');
-    const prefix = `PAT-${datePart}-`;
-
+async function generatePatrimonioCode(filialId = null) {
+    if (!db) return `PATR-${Date.now()}`;
+    
+    let prefix = "PATR";
+    if (filialId) {
+        const branchObj = branches.find(b => b.id === filialId);
+        if (branchObj && branchObj.prefixo) {
+            prefix = branchObj.prefixo.trim().toUpperCase();
+        }
+    }
+    
+    const searchPrefix = `${prefix}-`;
     try {
         const snap = await db.collection("inventario_ativos")
-            .where("codigo_patrimonio_ou_tag", ">=", prefix)
-            .where("codigo_patrimonio_ou_tag", "<", prefix + "Z")
+            .where("codigo_patrimonio_ou_tag", ">=", searchPrefix)
+            .where("codigo_patrimonio_ou_tag", "<", searchPrefix + "\uf8ff")
             .get();
 
         const existing = [];
         snap.forEach(doc => {
             const tag = doc.data().codigo_patrimonio_ou_tag || '';
-            const numPart = tag.replace(prefix, '');
+            const numPart = tag.replace(searchPrefix, '');
             const num = parseInt(numPart, 10);
             if (!isNaN(num)) existing.push(num);
         });
 
         const nextNum = existing.length > 0 ? Math.max(...existing) + 1 : 1;
-        return `${prefix}${String(nextNum).padStart(4, '0')}`;
+        return `${searchPrefix}${String(nextNum).padStart(4, '0')}`;
     } catch (e) {
         console.error('generatePatrimonioCode:', e);
-        return `${prefix}0001`;
+        return `${searchPrefix}0001`;
     }
 }
+
+async function autoGenerateTagForSelectedFilial() {
+    const filialId = document.getElementById("hard-filial").value;
+    const tagInput = document.getElementById("hard-tag");
+    const assetId = document.getElementById("hard-id").value;
+    
+    // Only generate if we are in "Create" mode (no assetId) or if the tag input is empty
+    if (!assetId || !tagInput.value.trim()) {
+        showToast("Gerando código de patrimônio para esta filial...", "info");
+        tagInput.value = await generatePatrimonioCode(filialId);
+    }
+}
+
+// Export function to global scope for HTML event listener
+window.autoGenerateTagForSelectedFilial = autoGenerateTagForSelectedFilial;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FEATURE 7: BOARD LIST VIEW (ACCORDION)
@@ -4555,25 +4668,25 @@ function updateHardwareUploadStatus(state) {
     lucide.createIcons();
 }
 
-async function uploadToImgur(file) {
+async function uploadToImgBB(file) {
     if (!file) return null;
-    if (IMGUR_CLIENT_ID === 'YOUR_IMGUR_CLIENT_ID') {
-        showToast('Configure o IMGUR_CLIENT_ID em app.js para usar upload de imagens.', 'warning');
+    const apiKey = localStorage.getItem("imgbb_api_key") || IMGBB_API_KEY;
+    if (!apiKey || apiKey === 'YOUR_IMGBB_API_KEY' || apiKey === '') {
+        showToast('Configure a Chave API do ImgBB nas configurações para enviar imagens.', 'warning');
         return null;
     }
     const formData = new FormData();
     formData.append('image', file);
     try {
-        const resp = await fetch('https://api.imgur.com/3/image', {
+        const resp = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
             method: 'POST',
-            headers: { Authorization: `Client-ID ${IMGUR_CLIENT_ID}` },
             body: formData
         });
         const data = await resp.json();
-        if (data.success) return data.data.link;
-        throw new Error(data.data?.error || 'Imgur upload failed');
+        if (data.success) return data.data.url;
+        throw new Error(data.error?.message || 'ImgBB upload failed');
     } catch (e) {
-        showToast('Falha no upload Imgur: ' + e.message, 'error');
+        showToast('Falha no upload ImgBB: ' + e.message, 'error');
         return null;
     }
 }
@@ -4582,9 +4695,9 @@ async function processAndUploadHardwarePhoto(file) {
     updateHardwareUploadStatus('uploading');
     try {
         const compressed = await compressImageBlob(file, 1020, 0.7);
-        const link = await uploadToImgur(compressed);
+        const link = await uploadToImgBB(compressed);
         if (link) {
-            imgurTempUrl = link;
+            photoTempUrl = link;
             updateHardwareUploadStatus('success');
             
             const previewContainer = document.getElementById("hard-foto-preview-container");
@@ -4597,7 +4710,7 @@ async function processAndUploadHardwarePhoto(file) {
             const fileLabel = document.getElementById("hard-file-label");
             if (fileLabel) fileLabel.textContent = "Alterar Foto";
         } else {
-            throw new Error("Retorno nulo da API Imgur");
+            throw new Error("Retorno nulo da API ImgBB");
         }
     } catch (err) {
         console.error("processAndUploadHardwarePhoto failed:", err);
@@ -4635,7 +4748,7 @@ function clearHardwarePhotoFailedState() {
 }
 
 function removeHardFoto() {
-    imgurTempUrl = null;
+    photoTempUrl = null;
     selectedHardwareFile = null;
     hardwarePhotoUploadFailed = false;
     isHardwarePhotoUploading = false;
@@ -4770,17 +4883,18 @@ handleHardwareSubmit = async function(e) {
     const tagInput = document.getElementById("hard-tag");
     if (tagInput && !tagInput.value.trim()) {
         showToast("Gerando código de patrimônio...", "info");
-        tagInput.value = await generatePatrimonioCode();
+        const filialId = document.getElementById("hard-filial").value;
+        tagInput.value = await generatePatrimonioCode(filialId);
     }
 
     const setor = document.getElementById("hard-setor")?.value.trim() || '';
 
     window._pendingSetor = setor;
-    window._pendingImgurUrl = imgurTempUrl;
+    window._pendingImgurUrl = photoTempUrl;
 
     await _originalHandleHardwareSubmit(e);
 
-    imgurTempUrl = null;
+    photoTempUrl = null;
     window._pendingSetor = '';
     window._pendingImgurUrl = null;
     
