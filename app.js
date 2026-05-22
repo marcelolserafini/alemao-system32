@@ -79,9 +79,9 @@ function initFirebase() {
             storage = firebaseApp.storage();
 
             if (statusBtn && statusText) {
-                statusBtn.className = "flex items-center space-x-2 text-xs font-semibold px-3 py-2.5 rounded-xl transition duration-300 glass hover:bg-slate-900 border border-accent-emerald/20 text-accent-emerald";
+                statusBtn.className = "hidden";
                 statusText.textContent = "Conectado ao Firebase";
-                statusBtn.classList.remove("hidden");
+                statusBtn.classList.add("hidden");
             }
 
             // Populate settings inputs in modal
@@ -120,9 +120,9 @@ function setDisconnectedUI() {
     const statusBtn = document.getElementById("btn-status");
     const statusText = document.getElementById("status-text");
     if (statusBtn && statusText) {
-        statusBtn.className = "pulse-critical flex items-center space-x-2 text-xs font-semibold px-3 py-2.5 rounded-xl transition duration-300 glass hover:bg-slate-900 border border-rose-500 text-rose-500";
+        statusBtn.className = "hidden";
         statusText.textContent = "Sem Conexão";
-        statusBtn.classList.remove("hidden");
+        statusBtn.classList.add("hidden");
     }
 
     // Force hide system wrappers completely
@@ -1169,8 +1169,7 @@ function applyUserContext() {
 
     const statusBtn = document.getElementById("btn-status");
     if (statusBtn) {
-        if (isAdm) statusBtn.classList.remove("hidden");
-        else statusBtn.classList.add("hidden");
+        statusBtn.classList.add("hidden");
     }
 
     populateFilters();
@@ -1206,16 +1205,36 @@ async function handleAuthSession(user) {
                 profile = doc.data();
                 profile.id = doc.id;
             } else {
-                console.warn("Perfil não encontrado no Firestore. Criando colaborador...");
+                console.warn("Perfil não encontrado no Firestore. Criando perfil...");
                 const userName = user.displayName || user.email.split('@')[0] || 'Novo Usuário';
+                
+                // Verificar se é o primeiro usuário cadastrado na coleção 'perfis'
+                const profilesSnap = await db.collection("perfis").limit(1).get();
+                const isFirst = profilesSnap.empty;
+                
                 profile = {
                     id: userId,
                     nome: userName,
-                    role: 'Colaborador',
+                    role: isFirst ? 'Administrador' : 'Colaborador',
                     email: user.email || '',
+                    aprovado: isFirst ? true : false,
                     created_at: new Date().toISOString()
                 };
                 await db.collection("perfis").doc(userId).set(profile);
+            }
+
+            if (!profile.aprovado) {
+                const errorBox = document.getElementById("auth-error-box");
+                const errorMsg = document.getElementById("auth-error-message");
+                if (errorBox && errorMsg) {
+                    errorMsg.textContent = "Acesso Pendente: Sua conta foi criada com sucesso, mas precisa ser liberada por um Administrador antes do primeiro acesso.";
+                    errorBox.classList.remove("hidden");
+                }
+                showToast("Sua conta está pendente de aprovação por um Administrador.", "warning");
+                
+                currentUser = null;
+                await auth.signOut();
+                return;
             }
 
             currentUser = profile;
@@ -1294,16 +1313,29 @@ async function handleAuthSubmit(e) {
                 await user.updateProfile({ displayName: nome });
             }
             
+            // Verificar se é o primeiro usuário cadastrado
+            const profilesSnap = await db.collection("perfis").limit(1).get();
+            const isFirst = profilesSnap.empty;
+            
             const newProfile = {
                 id: user.uid,
                 nome: nome || email.split('@')[0],
                 email: email,
-                role: "Colaborador",
+                role: isFirst ? "Administrador" : "Colaborador",
+                aprovado: isFirst ? true : false,
                 created_at: new Date().toISOString()
             };
             
             await db.collection("perfis").doc(user.uid).set(newProfile);
-            showToast("Conta criada com sucesso!", "info");
+            
+            if (isFirst) {
+                showToast("Conta de Administrador criada com sucesso!", "success");
+            } else {
+                showToast("Conta criada! Aguarde a liberação do Administrador.", "warning");
+                errorMessage.textContent = "Cadastro concluído! Sua conta está pendente de liberação por um Administrador antes do primeiro acesso.";
+                errorBox.classList.remove("hidden");
+                await auth.signOut();
+            }
         }
     } catch (error) {
         console.error("Erro na autenticação:", error);
@@ -1823,7 +1855,10 @@ async function handlePermissionsSubmit(e) {
     const selectedBranchIds = Array.from(checkedCheckboxes).map(cb => cb.value);
 
     try {
-        await db.collection("perfis").doc(userId).update({ role });
+        await db.collection("perfis").doc(userId).update({ 
+            role,
+            aprovado: true
+        });
 
         // Clean user filial mappings and insert new ones
         const snap = await db.collection("usuario_filiais").where("id_usuario", "==", userId).get();
@@ -1866,6 +1901,9 @@ async function handlePermissionsSubmit(e) {
 
 async function quickReleaseUserAccess(userId, userName) {
     try {
+        // Marcar usuário como aprovado no Firestore
+        await db.collection("perfis").doc(userId).update({ aprovado: true });
+
         // Clear all mappings
         const snap = await db.collection("usuario_filiais").where("id_usuario", "==", userId).get();
         const batch = db.batch();
