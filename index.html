@@ -2198,6 +2198,84 @@
         </div>
     </div>
 
+    <!-- MODAL: CONSOLE RMM TELEMETRIA (NOVO) -->
+    <div id="modal-rmm-hud" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md hidden">
+        <div class="w-full max-w-xl glass border-white/10 rounded-2xl p-6 shadow-2xl relative flex flex-col gap-5">
+            <!-- Header do Modal -->
+            <div class="flex items-center justify-between pb-4 border-b border-white/5">
+                <div class="flex items-center space-x-3">
+                    <div class="h-10 w-10 rounded-xl bg-accent-cyan/10 border border-accent-cyan/30 flex items-center justify-center text-accent-cyan shadow shadow-accent-cyan/5">
+                        <i data-lucide="activity" class="h-5.5 w-5.5 animate-pulse"></i>
+                    </div>
+                    <div>
+                        <h3 id="modal-rmm-title" class="font-outfit font-bold text-lg text-white">Console RMM - Ativo</h3>
+                        <p id="modal-rmm-subtitle" class="text-xs text-slate-400">Telemetria de desempenho em tempo real</p>
+                    </div>
+                </div>
+                <button onclick="closeRmmHudModal()" class="text-slate-400 hover:text-white transition duration-200 p-1.5 rounded-lg hover:bg-white/5">
+                    <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+            </div>
+
+            <!-- Dashboard Content -->
+            <div class="space-y-5">
+                <!-- System metadata -->
+                <div class="grid grid-cols-2 gap-4 bg-slate-900/40 border border-white/5 p-4 rounded-xl text-xs font-mono text-slate-300">
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between"><span class="text-slate-500">Hostname:</span><span id="rmm-os-hostname" class="text-white font-bold">-</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Sistema:</span><span id="rmm-os-platform" class="text-white font-bold">-</span></div>
+                    </div>
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between"><span class="text-slate-500">Logado:</span><span id="rmm-os-user" class="text-white font-bold">-</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">IP Local:</span><span id="rmm-net-ip" class="text-accent-cyan font-bold">-</span></div>
+                    </div>
+                </div>
+
+                <!-- Metrics HUD -->
+                <div class="space-y-4">
+                    <!-- CPU Usage -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-xs font-semibold">
+                            <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="cpu" class="h-4 w-4 text-slate-400"></i> Uso de CPU</span>
+                            <span id="rmm-cpu-percent" class="font-mono text-white">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-white/5">
+                            <div id="rmm-cpu-bar" class="bg-gradient-to-r from-accent-cyan to-accent-teal h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- RAM Usage -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-xs font-semibold">
+                            <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="database" class="h-4 w-4 text-slate-400"></i> Memória RAM</span>
+                            <span id="rmm-ram-text" class="font-mono text-white">0.0 GB / 0.0 GB (0%)</span>
+                        </div>
+                        <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-white/5">
+                            <div id="rmm-ram-bar" class="bg-gradient-to-r from-indigo-500 to-accent-cyan h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Disk Space -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-xs font-semibold">
+                            <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="hard-drive" class="h-4 w-4 text-slate-400"></i> Armazenamento (Disco Principal)</span>
+                            <span id="rmm-disk-text" class="font-mono text-white">0.0 GB Livre de 0.0 GB (0% Usado)</span>
+                        </div>
+                        <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-white/5">
+                            <div id="rmm-disk-bar" class="bg-gradient-to-r from-amber-500 to-rose-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Details -->
+            <div class="flex items-center justify-between text-[10px] text-slate-500 pt-3 border-t border-white/5 font-mono">
+                <span class="flex items-center gap-1"><i data-lucide="refresh-cw" class="h-3 w-3 animate-spin"></i> Atualizado em tempo real</span>
+                <span>Último reporte: <strong id="rmm-last-seen" class="text-slate-400">-</strong></span>
+            </div>
+        </div>
+    </div>
+
     <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-6 right-6 z-50 flex items-center space-x-2 px-4 py-3 rounded-xl shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 border">
         <i id="toast-icon" class="h-5 w-5"></i>

@@ -2688,7 +2688,8 @@ function initModalClickOutside() {
         { id: "modal-filial-panel", closeFn: closeFilialPanelModal },
         { id: "modal-credential", closeFn: closeCredentialModal },
         { id: "modal-hardware", closeFn: closeHardwareAssetModal },
-        { id: "modal-asset-history", closeFn: closeAssetHistoryModal }
+        { id: "modal-asset-history", closeFn: closeAssetHistoryModal },
+        { id: "modal-rmm-hud", closeFn: closeRmmHudModal }
     ];
     
     modals.forEach(({ id, closeFn }) => {
@@ -3424,10 +3425,18 @@ function renderInventoryAssets() {
 
             <!-- Footer Action Controls -->
             <div class="flex items-center justify-between border-t border-white/5 mt-5 pt-3.5 gap-2">
-                <button onclick="openAssetHistoryModal('${a.id}')" class="flex items-center space-x-1.5 text-[11px] font-bold px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg transition" title="Ver Histórico de Movimentação">
-                    <i data-lucide="history" class="h-3.5 w-3.5"></i>
-                    <span>Histórico</span>
-                </button>
+                <div class="flex gap-1.5">
+                    <button onclick="openAssetHistoryModal('${a.id}')" class="flex items-center space-x-1.5 text-[11px] font-bold px-2 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg transition" title="Ver Histórico de Movimentação">
+                        <i data-lucide="history" class="h-3.5 w-3.5"></i>
+                        <span>Histórico</span>
+                    </button>
+                    ${a.telemetria ? `
+                        <button onclick="openRmmHudModal('${a.id}')" class="flex items-center space-x-1 px-2 py-2 bg-accent-cyan/15 hover:bg-accent-cyan/25 border border-accent-cyan/20 text-accent-cyan rounded-lg transition shadow shadow-accent-cyan/5 text-[10px] font-bold" title="Ver Telemetria RMM em Tempo Real">
+                            <i data-lucide="activity" class="h-3.5 w-3.5 text-accent-cyan animate-pulse"></i>
+                            <span>Ver RMM</span>
+                        </button>
+                    ` : ""}
+                </div>
 
                 <div class="flex gap-1.5">
                     ${canEdit ? `
@@ -4142,6 +4151,87 @@ async function openAssetHistoryModal(assetId) {
 
 function closeAssetHistoryModal() {
     const modal = document.getElementById("modal-asset-history");
+    if (modal) modal.classList.add("hidden");
+}
+
+function openRmmHudModal(assetId) {
+    const asset = assets.find(a => a.id === assetId);
+    if (!asset || !asset.telemetria) {
+        showToast("Dados de telemetria não disponíveis para este ativo.", "error");
+        return;
+    }
+
+    const t = asset.telemetria;
+
+    // Preencher metadados de sistema
+    document.getElementById("modal-rmm-title").textContent = `Console RMM - ${asset.marca_modelo}`;
+    document.getElementById("modal-rmm-subtitle").textContent = `Tag: ${asset.codigo_patrimonio_ou_tag} | Monitoramento Ativo`;
+    
+    document.getElementById("rmm-os-hostname").textContent = t.hostname || "-";
+    document.getElementById("rmm-os-platform").textContent = `${t.os_platform || "-"} (${t.os_release || "-"})`;
+    document.getElementById("rmm-os-user").textContent = t.logged_user || "-";
+    document.getElementById("rmm-net-ip").textContent = t.ip_local || asset.ip_local || "-";
+    
+    // CPU
+    const cpuVal = parseFloat(t.cpu_percent || 0).toFixed(1);
+    document.getElementById("rmm-cpu-percent").textContent = `${cpuVal}%`;
+    const cpuBar = document.getElementById("rmm-cpu-bar");
+    if (cpuBar) {
+        cpuBar.style.width = `${cpuVal}%`;
+        if (cpuVal > 85) {
+            cpuBar.className = "bg-gradient-to-r from-rose-500 to-red-600 h-full rounded-full transition-all duration-500";
+        } else if (cpuVal > 50) {
+            cpuBar.className = "bg-gradient-to-r from-amber-500 to-orange-600 h-full rounded-full transition-all duration-500";
+        } else {
+            cpuBar.className = "bg-gradient-to-r from-accent-cyan to-accent-teal h-full rounded-full transition-all duration-500";
+        }
+    }
+
+    // RAM
+    const ramTotal = parseFloat(t.ram_total_gb || 0).toFixed(1);
+    const ramUsed = parseFloat(t.ram_used_gb || 0).toFixed(1);
+    const ramPerc = parseFloat(t.ram_percent || 0).toFixed(0);
+    document.getElementById("rmm-ram-text").textContent = `${ramUsed} GB / ${ramTotal} GB (${ramPerc}%)`;
+    const ramBar = document.getElementById("rmm-ram-bar");
+    if (ramBar) {
+        ramBar.style.width = `${ramPerc}%`;
+        if (ramPerc > 85) {
+            ramBar.className = "bg-gradient-to-r from-rose-500 to-red-600 h-full rounded-full transition-all duration-500";
+        } else {
+            ramBar.className = "bg-gradient-to-r from-indigo-500 to-accent-cyan h-full rounded-full transition-all duration-500";
+        }
+    }
+
+    // Disco
+    const diskTotal = parseFloat(t.disk_total_gb || 0).toFixed(0);
+    const diskFree = parseFloat(t.disk_free_gb || 0).toFixed(0);
+    const diskPerc = parseFloat(t.disk_percent || 0).toFixed(0);
+    document.getElementById("rmm-disk-text").textContent = `${diskFree} GB Livre de ${diskTotal} GB (${diskPerc}% em uso)`;
+    const diskBar = document.getElementById("rmm-disk-bar");
+    if (diskBar) {
+        diskBar.style.width = `${diskPerc}%`;
+        if (diskPerc > 85) {
+            diskBar.className = "bg-gradient-to-r from-rose-500 to-red-600 h-full rounded-full transition-all duration-500";
+        } else {
+            diskBar.className = "bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full transition-all duration-500";
+        }
+    }
+
+    // Último Reporte
+    if (t.last_seen || asset.last_seen) {
+        const dateFormatted = new Date(t.last_seen || asset.last_seen).toLocaleTimeString("pt-BR");
+        document.getElementById("rmm-last-seen").textContent = dateFormatted;
+    } else {
+        document.getElementById("rmm-last-seen").textContent = "-";
+    }
+
+    const modal = document.getElementById("modal-rmm-hud");
+    if (modal) modal.classList.remove("hidden");
+    lucide.createIcons();
+}
+
+function closeRmmHudModal() {
+    const modal = document.getElementById("modal-rmm-hud");
     if (modal) modal.classList.add("hidden");
 }
 
