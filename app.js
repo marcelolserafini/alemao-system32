@@ -40,19 +40,31 @@ function initFirebase() {
     
     // Pre-popula credenciais reais do usuário se estiver vazio no localStorage
     if (!apiKey || !authDomain || !projectId || !storageBucket || !appId) {
-        apiKey = "AIzaSyB5qH8g-kcMv4yGqk7Krm5D_vbV26X-7XU";
-        authDomain = "alemaozinho-system32.firebaseapp.com";
-        projectId = "alemaozinho-system32";
-        storageBucket = "alemaozinho-system32.firebasestorage.app";
-        messagingSenderId = "816402135407";
-        appId = "1:816402135407:web:ff9ee42560e2b8fef2109a";
+        // Busca do arquivo de configuração externo config.js (protegido do Git)
+        const config = typeof FIREBASE_CONFIG !== 'undefined' ? FIREBASE_CONFIG : {
+            apiKey: "",
+            authDomain: "",
+            projectId: "",
+            storageBucket: "",
+            messagingSenderId: "",
+            appId: ""
+        };
         
-        localStorage.setItem("fb_api_key", apiKey);
-        localStorage.setItem("fb_auth_domain", authDomain);
-        localStorage.setItem("fb_project_id", projectId);
-        localStorage.setItem("fb_storage_bucket", storageBucket);
-        localStorage.setItem("fb_messaging_sender_id", messagingSenderId);
-        localStorage.setItem("fb_app_id", appId);
+        apiKey = config.apiKey || "";
+        authDomain = config.authDomain || "";
+        projectId = config.projectId || "";
+        storageBucket = config.storageBucket || "";
+        messagingSenderId = config.messagingSenderId || "";
+        appId = config.appId || "";
+        
+        if (apiKey) {
+            localStorage.setItem("fb_api_key", apiKey);
+            localStorage.setItem("fb_auth_domain", authDomain);
+            localStorage.setItem("fb_project_id", projectId);
+            localStorage.setItem("fb_storage_bucket", storageBucket);
+            localStorage.setItem("fb_messaging_sender_id", messagingSenderId);
+            localStorage.setItem("fb_app_id", appId);
+        }
     }
     
     const statusBtn = document.getElementById("btn-status");
@@ -2344,26 +2356,60 @@ function renderAdminPanel() {
         const tr = document.createElement("tr");
         tr.className = "hover:bg-white/[0.02] transition duration-150";
         const pNomeEscaped = (p.nome || "").replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        
+        let controlsHtml = "";
+        
+        // Permissões button is always shown (admins can adjust permissions of everyone, including themselves)
+        controlsHtml += `
+            <button onclick="openPermissionsModal('${p.id}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-accent-cyan/15 hover:bg-accent-cyan/25 text-accent-cyan border border-accent-cyan/20 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm shadow-accent-cyan/5 ${currentUser && p.id !== currentUser.id ? 'mr-2' : ''}" title="Gerenciar permissões e filiais do usuário">
+                <i data-lucide="shield" class="h-3.5 w-3.5"></i>
+                <span>Permissões</span>
+            </button>
+        `;
+
+        // Action buttons are only displayed for OTHER users (never self-block or self-delete)
+        if (currentUser && p.id !== currentUser.id) {
+            if (p.aprovado) {
+                // Show Bloquear button
+                controlsHtml += `
+                    <button onclick="quickReleaseUserAccess('${p.id}', '${pNomeEscaped}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm mr-2" title="Bloquear acesso do usuário">
+                        <i data-lucide="lock" class="h-3.5 w-3.5"></i>
+                        <span>Bloquear</span>
+                    </button>
+                `;
+            } else {
+                // Show Liberar button
+                controlsHtml += `
+                    <button onclick="quickReleaseUserAccess('${p.id}', '${pNomeEscaped}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-accent-emerald/15 hover:bg-accent-emerald/25 text-accent-emerald border border-accent-emerald/20 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm mr-2" title="Liberar acesso do usuário">
+                        <i data-lucide="unlock" class="h-3.5 w-3.5"></i>
+                        <span>Liberar</span>
+                    </button>
+                `;
+            }
+
+            // Show Excluir button
+            controlsHtml += `
+                <button onclick="deleteUserProfile('${p.id}', '${pNomeEscaped}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-600/30 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm" title="Excluir usuário permanentemente">
+                    <i data-lucide="trash-2" class="h-3.5 w-3.5"></i>
+                    <span>Excluir</span>
+                </button>
+            `;
+        }
+
         tr.innerHTML = `
             <td class="px-6 py-4 font-semibold text-white">
-                <div class="flex items-center gap-2 flex-wrap">
-                    <span>${p.nome || "Novo Usuário"} ${p.cidade ? `<span class="text-[10px] text-slate-400 font-normal font-mono">(${p.cidade})</span>` : ""}</span>
-                    ${isPending ? `<span class="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-1.5 py-0.5 rounded-md animate-pulse" title="Novo cadastro aguardando liberação de acesso"><i data-lucide="shield-alert" class="h-3 w-3"></i> PENDENTE</span>` : ""}
+                <div class="flex flex-col gap-0.5">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span>${p.nome || "Novo Usuário"} ${p.cidade ? `<span class="text-[10px] text-slate-400 font-normal font-mono">(${p.cidade})</span>` : ""}</span>
+                        ${isPending ? `<span class="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-1.5 py-0.5 rounded-md animate-pulse" title="Novo cadastro aguardando liberação de acesso"><i data-lucide="shield-alert" class="h-3 w-3"></i> PENDENTE</span>` : ""}
+                    </div>
+                    <span class="text-xs text-slate-400 font-normal font-mono select-all">${p.email || "Sem e-mail"}</span>
                 </div>
             </td>
             <td class="px-6 py-4">${roleBadge}</td>
             <td class="px-6 py-4 max-w-xs md:max-w-md lg:max-w-lg flex flex-wrap gap-1">${branchesListText}</td>
             <td class="px-6 py-4 text-right">
-                ${isPending ? `
-                <button onclick="quickReleaseUserAccess('${p.id}', '${pNomeEscaped}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-accent-emerald/15 hover:bg-accent-emerald/25 text-accent-emerald border border-accent-emerald/20 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm shadow-accent-emerald/5 mr-2">
-                    <i data-lucide="unlock" class="h-3.5 w-3.5"></i>
-                    <span>Liberar Acesso</span>
-                </button>
-                ` : ""}
-                <button onclick="openPermissionsModal('${p.id}')" class="inline-flex items-center gap-1.5 text-xs font-bold bg-accent-cyan/15 hover:bg-accent-cyan/25 text-accent-cyan border border-accent-cyan/20 px-3 py-1.5 rounded-xl transition duration-150 shadow-sm shadow-accent-cyan/5">
-                    <i data-lucide="shield" class="h-3.5 w-3.5"></i>
-                    <span>Permissões</span>
-                </button>
+                ${controlsHtml}
             </td>
         `;
         listContainer.appendChild(tr);
@@ -4290,17 +4336,37 @@ except ImportError:
     input(f"\\nPressione [ENTER] para fechar...")
     sys.exit(1)
 
+import os
+
+def load_env():
+    """Reads local .env file key-value pairs (avoiding python-dotenv dependency)."""
+    env = {}
+    if os.path.exists(".env"):
+        try:
+            with open(".env", "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        env[k.strip()] = v.strip().strip('"').strip("'")
+        except Exception:
+            pass
+    return env
+
+# Load environment
+env_vars = load_env()
+
 # Firebase Project Configuration
 PROJECT_ID = "alemaozinho-system32"
-API_KEY = "AIzaSyB5qH8g-kcMv4yGqk7Krm5D_vbV26X-7XU"
+API_KEY = env_vars.get("FIREBASE_API_KEY", "AIzaSyB5qH8g-kcMv4yGqk7Krm5D_vbV26X-7XU")
 COLLECTION_NAME = "inventario_ativos"
 BASE_URL = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/{COLLECTION_NAME}"
 CONFIG_FILE = "agent_config.json"
 
 # Pre-configured Asset Tag (PWA automated deployment link)
 PRE_CONFIGURED_TAG = ""
-PRE_CONFIGURED_EMAIL = "mtr@mtr.com"
-PRE_CONFIGURED_PASSWORD = "mtr123"
+PRE_CONFIGURED_EMAIL = env_vars.get("RMM_EMAIL", "mtr@mtr.com")
+PRE_CONFIGURED_PASSWORD = env_vars.get("RMM_PASSWORD", "mtr123")
 
 def get_tag_from_filename():
     """Extracts tag from running filename (e.g. agent_PATR-SP-002.exe -> PATR-SP-002)"""
@@ -5833,6 +5899,39 @@ async function confirmBlockUser() {
         renderAdminPanel();
     } catch (e) {
         showToast("Erro ao bloquear: " + e.message, "error");
+    }
+}
+
+async function deleteUserProfile(userId, userName) {
+    if (!currentUser || currentUser.role !== 'Administrador') {
+        showToast("Acesso Negado: Apenas Administradores podem excluir usuários.", "error");
+        return;
+    }
+    if (userId === currentUser.id) {
+        showToast("Você não pode excluir a sua própria conta!", "error");
+        return;
+    }
+    if (!confirm(`⚠️ ATENÇÃO: Tem certeza absoluta que deseja EXCLUIR permanentemente o usuário "${userName}"?\n\nEsta ação excluirá o perfil dele e todas as permissões e vínculos com filiais no sistema. Esta ação NÃO pode ser desfeita!`)) {
+        return;
+    }
+    try {
+        // Excluir o documento do perfil
+        await db.collection("perfis").doc(userId).delete();
+
+        // Buscar e excluir os vínculos na coleção usuario_filiais
+        const snap = await db.collection("usuario_filiais").where("id_usuario", "==", userId).get();
+        const batch = db.batch();
+        snap.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+
+        showToast(`Usuário "${userName}" excluído com sucesso!`, "success");
+        await loadData();
+        renderAdminPanel();
+    } catch (e) {
+        showToast("Erro ao excluir usuário: " + e.message, "error");
+        console.error("Erro ao excluir usuário:", e);
     }
 }
 
