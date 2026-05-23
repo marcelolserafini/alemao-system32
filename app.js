@@ -1954,6 +1954,29 @@ function openRequestModal() {
 
     const modal = document.getElementById("modal-request");
     if (modal) modal.classList.remove("hidden");
+    
+    // Popular dropdown de ativos vinculados da filial
+    updateRequestAssetDropdown();
+}
+
+function updateRequestAssetDropdown() {
+    const filialId = document.getElementById("req-filial").value;
+    const selectAtivo = document.getElementById("req-ativo");
+    if (!selectAtivo) return;
+    
+    selectAtivo.innerHTML = '<option value="">Nenhum (Chamado Geral)</option>';
+    
+    // Filtrar ativos do inventário correspondentes à filial selecionada
+    const filteredAssets = filialId 
+        ? assets.filter(a => a.id_filial_atual === filialId)
+        : assets;
+        
+    filteredAssets.forEach(a => {
+        const opt = document.createElement("option");
+        opt.value = a.id;
+        opt.textContent = `[${a.codigo_patrimonio_ou_tag}] ${a.marca_modelo}`;
+        selectAtivo.appendChild(opt);
+    });
 }
 
 function closeRequestModal() {
@@ -1981,6 +2004,7 @@ async function handleRequestSubmit(e) {
     const id_usuario_designado = document.getElementById("req-designado").value || null;
     const descricao = document.getElementById("req-descricao").value.trim();
     const fileInput = document.getElementById("req-foto");
+    const id_ativo = document.getElementById("req-ativo").value || null;
 
     try {
         let url_foto = null;
@@ -1996,6 +2020,7 @@ async function handleRequestSubmit(e) {
             urgencia,
             descricao,
             url_foto,
+            id_ativo,
             status: "Aguardando Triagem",
             justificativa_rejeicao: null,
             id_usuario_designado,
@@ -2137,6 +2162,19 @@ function createRequestCardDOM(req) {
             `;
         })()}
 
+        <!-- Linked Asset Info [NOVO] -->
+        ${(() => {
+            if (!req.id_ativo) return "";
+            const linkedAsset = assets.find(a => a.id === req.id_ativo);
+            if (!linkedAsset) return "";
+            return `
+                <div class="flex items-center gap-1.5 text-[11px] text-amber-400 bg-amber-950/20 border border-amber-500/10 px-3 py-1.5 rounded-xl self-start font-medium">
+                    <i data-lucide="monitor" class="h-3.5 w-3.5 text-amber-400"></i>
+                    <span>Equipamento: <strong class="text-white">${linkedAsset.marca_modelo} [${linkedAsset.codigo_patrimonio_ou_tag}]</strong></span>
+                </div>
+            `;
+        })()}
+
         <div class="flex items-center justify-between text-[11px] text-slate-500 pt-3 border-t border-white/5">
             <span class="flex items-center gap-1 font-medium">
                 <i data-lucide="building" class="h-3.5 w-3.5 text-slate-400"></i> ${branchName}
@@ -2192,8 +2230,26 @@ async function approveRequest(id) {
         const newProjRef = db.collection("projetos").doc();
         await newProjRef.set({
             id: newProjRef.id,
+            id_ativo: req.id_ativo || null, // herdar vínculo no projeto
             ...projectPayload
         });
+
+        // Se houver ativo vinculado, atualizar status para Manutenção e registrar log de histórico do ativo
+        if (req.id_ativo) {
+            const assetObj = assets.find(a => a.id === req.id_ativo);
+            await db.collection("inventario_ativos").doc(req.id_ativo).update({
+                status: "Manutenção"
+            });
+
+            await db.collection("historico_ativos").add({
+                id_ativo: req.id_ativo,
+                usuario_nome: currentUser ? currentUser.nome : "Sistema",
+                data_movimentacao: new Date().toISOString(),
+                status_origem: assetObj ? assetObj.status : "Disponível",
+                status_destino: "Manutenção",
+                descricao_acao: `Chamado Técnico "${req.titulo}" Aprovado - Equipamento enviado para manutenção preventiva/corretiva.`
+            });
+        }
 
         showToast("Solicitação aprovada e convertida em projeto com sucesso!", "success");
         await loadData();
@@ -2322,6 +2378,11 @@ function renderAdminPanel() {
     loadAdminPasswordCentral().catch(err => {
         console.error("Erro ao carregar central de senhas admin:", err);
     });
+
+    // Refresh Security Audit Logs [NOVO]
+    loadSecurityAuditLogs().catch(err => {
+        console.error("Erro ao carregar logs de segurança admin:", err);
+    });
 }
 
 function renderAdminBranches() {
@@ -2360,6 +2421,93 @@ function renderAdminBranches() {
     });
 
     lucide.createIcons();
+}
+
+async function loadSecurityAuditLogs() {
+    const listContainer = document.getElementById("admin-security-logs-list");
+    if (!listContainer) return;
+    listContainer.innerHTML = "";
+
+    try {
+        const snap = await db.collection("logs_visualizacao_credenciais")
+            .orderBy("created_at", "desc")
+            .limit(50)
+            .get();
+
+        if (snap.empty) {
+            listContainer.innerHTML = `
+                <tr>
+                    <td colspan="5" class="px-6 py-8 text-center text-slate-500 italic">Nenhum log de auditoria registrado.</td>
+                </tr>
+            `;
+            return;
+        }
+
+        snap.forEach(doc => {
+            const log = doc.data();
+            const dateFormatted = new Date(log.created_at).toLocaleString("pt-BR");
+            
+            // Find target item name from global collections
+            let targetName = `ID: ${log.id_credencial}`;
+            let targetType = "Ativo Técnico";
+            
+            if (log.id_credencial === 'export-csv') {
+                targetName = "Exportação de Planilha CSV";
+                targetType = "Relatório";
+            } else if (log.id_credencial === 'export-pdf') {
+                targetName = "Exportação de PDF";
+                targetType = "Relatório";
+            } else {
+                // Search in credentials/assets
+                const hwAsset = assets.find(a => a.id === log.id_credencial);
+                if (hwAsset) {
+                    targetName = `[${hwAsset.codigo_patrimonio_ou_tag}] ${hwAsset.marca_modelo}`;
+                    targetType = "Hardware";
+                } else {
+                    const mappedItem = (window.adminPasswordsList || []).find(item => item.id === log.id_credencial);
+                    if (mappedItem) {
+                        targetName = mappedItem.nome_identificador || mappedItem.marca_modelo || `ID: ${log.id_credencial}`;
+                        targetType = mappedItem.tipo_ativo ? "Credencial" : "Hardware";
+                    }
+                }
+            }
+
+            let actionBadgeColor = "bg-slate-800 text-slate-400 border-slate-700";
+            if (log.tipo_acao.includes("Cópia")) actionBadgeColor = "bg-amber-950/40 text-amber-400 border-amber-500/10";
+            else if (log.tipo_acao.includes("Visualização")) actionBadgeColor = "bg-cyan-950/40 text-accent-cyan border-accent-cyan/10";
+            else if (log.tipo_acao.includes("Exportação")) actionBadgeColor = "bg-emerald-950/40 text-accent-emerald border-accent-emerald/10";
+
+            const tr = document.createElement("tr");
+            tr.className = "hover:bg-white/[0.02] transition duration-150";
+            tr.innerHTML = `
+                <td class="px-6 py-4 font-mono text-xs text-slate-400">${dateFormatted}</td>
+                <td class="px-6 py-4">
+                    <div class="flex items-center gap-1.5 font-semibold text-slate-200">
+                        <i data-lucide="user" class="h-3.5 w-3.5 text-slate-400"></i>
+                        <span>${log.usuario_nome || "Operador Desconhecido"}</span>
+                    </div>
+                </td>
+                <td class="px-6 py-4">
+                    <span class="px-2 py-0.5 rounded border text-xs font-bold uppercase tracking-wider ${actionBadgeColor}">
+                        ${log.tipo_acao}
+                    </span>
+                </td>
+                <td class="px-6 py-4 font-medium text-slate-200">${targetName}</td>
+                <td class="px-6 py-4 text-xs font-semibold text-slate-400">${targetType}</td>
+            `;
+            listContainer.appendChild(tr);
+        });
+
+        lucide.createIcons();
+
+    } catch (err) {
+        console.error("Erro ao carregar logs de auditoria:", err);
+        listContainer.innerHTML = `
+            <tr>
+                <td colspan="5" class="px-6 py-8 text-center text-rose-400 font-semibold">Erro ao carregar logs: ${err.message}</td>
+            </tr>
+        `;
+    }
 }
 
 function openPermissionsModal(userId) {

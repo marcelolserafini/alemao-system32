@@ -168,6 +168,7 @@
         /* Textos e Contraste Gerais (Evitando quebrar botões/badges com fundo colorido) */
         .light-theme .text-slate-100,
         .light-theme .text-slate-200,
+        .light-theme .text-white:not(button):not(a):not([class*="bg-"]):not([class*="badge"]),
         .light-theme h2,
         .light-theme h3,
         .light-theme #stat-total {
@@ -952,6 +953,36 @@
                     </table>
                 </div>
             </div>
+
+            <!-- Registro de Auditoria de Segurança (Logs) [NOVO] -->
+            <div class="glass rounded-2xl p-6 border border-white/5 shadow-xl mt-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="font-outfit font-extrabold text-2xl text-white flex items-center gap-2">
+                            <i data-lucide="shield-check" class="h-6 w-6 text-accent-cyan"></i>
+                            Log de Auditoria de Segurança (RBAC & Senhas)
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">Histórico completo de acessos, visualizações de credenciais e alterações de permissões em tempo real</p>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto rounded-xl border border-white/5 bg-slate-900/30">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-white/10 bg-slate-950/40 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                <th class="px-6 py-4">Data / Hora</th>
+                                <th class="px-6 py-4">Usuário Operador</th>
+                                <th class="px-6 py-4">Ação Realizada</th>
+                                <th class="px-6 py-4">Alvo / Equipamento</th>
+                                <th class="px-6 py-4">Status / Detalhes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-security-logs-list" class="divide-y divide-white/5 text-sm text-slate-300">
+                            <!-- Injetado dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </section>
 
         <!-- SECTION 4: INVENTÁRIO GLOBAL DE ATIVOS (NOVO) -->
@@ -1463,10 +1494,10 @@
                     <input type="text" id="req-titulo" required placeholder="Ex: Goteira no ar condicionado central" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500">
                 </div>
                 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Filial Destino *</label>
-                        <select id="req-filial" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 appearance-none">
+                        <select id="req-filial" required onchange="updateRequestAssetDropdown()" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 appearance-none">
                             <!-- Populado via JS -->
                         </select>
                     </div>
@@ -1482,6 +1513,13 @@
                     <div>
                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Designar Responsável</label>
                         <select id="req-designado" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 appearance-none">
+                            <!-- Populado via JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Equipamento Vinculado</label>
+                        <select id="req-ativo" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 appearance-none">
+                            <option value="">Nenhum (Chamado Geral)</option>
                             <!-- Populado via JS -->
                         </select>
                     </div>
