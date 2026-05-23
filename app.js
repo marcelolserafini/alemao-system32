@@ -3361,7 +3361,7 @@ function renderInventoryAssets() {
                         <span class="text-slate-500 font-semibold">Endereço IP:</span>
                         <span class="text-slate-300 font-bold flex items-center gap-1">
                             <span class="h-2 w-2 rounded-full ${a.online ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}" title="${a.online ? 'Online' : 'Offline'}"></span>
-                            ${a.ip_local || "-"}
+                            ${(a.telemetria && a.telemetria.ip_local) ? a.telemetria.ip_local : (a.ip_local || "-")}
                         </span>
                     </div>
                     <div class="flex justify-between font-mono">
@@ -3439,6 +3439,9 @@ function renderInventoryAssets() {
                 </div>
 
                 <div class="flex gap-1.5">
+                    <button onclick="downloadPreConfiguredAgent('${a.id}', 'py')" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition" title="Baixar Script Python (.py) Pré-configurado">
+                        <i data-lucide="file-code" class="h-3.5 w-3.5 text-accent-cyan"></i>
+                    </button>
                     ${canEdit ? `
                         <button onclick="openHardwareAssetModal('${a.id}')" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition" title="Editar Ativo">
                             <i data-lucide="edit" class="h-3.5 w-3.5"></i>
@@ -4233,6 +4236,724 @@ function openRmmHudModal(assetId) {
 function closeRmmHudModal() {
     const modal = document.getElementById("modal-rmm-hud");
     if (modal) modal.classList.add("hidden");
+}
+
+const AGENT_BASELINE_CODE = `import sys
+import os
+import urllib.request
+import urllib.parse
+import urllib.error
+import json
+import time
+import getpass
+import socket
+import platform
+from datetime import datetime
+
+# Visual styling indicators
+COLOR_GREEN = "\\033[92m"
+COLOR_RED = "\\033[91m"
+COLOR_YELLOW = "\\033[93m"
+COLOR_CYAN = "\\033[96m"
+COLOR_MAGENTA = "\\033[95m"
+COLOR_RESET = "\\033[0m"
+
+# Windows PowerShell terminal colors setup
+if sys.platform.startswith("win"):
+    import ctypes
+    try:
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+    except Exception:
+        pass
+
+# Ensure psutil is installed
+try:
+    import psutil
+except ImportError:
+    print(f"\\n{COLOR_RED}❌ Erro: A biblioteca 'psutil' não está instalada.{COLOR_RESET}")
+    print(f"{COLOR_YELLOW}Por favor, instale-a executando o comando:{COLOR_RESET}")
+    print(f"👉 {COLOR_CYAN}pip install psutil{COLOR_RESET}\\n")
+    
+    # Log dependency error
+    log_file = "agent_error.log"
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"==================================================\\n")
+            f.write(f"TIMESTAMP: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\\n")
+            f.write(f"ERROR DETAILS:\\nImportError: A biblioteca 'psutil' nao esta instalada. Execute 'pip install psutil' para resolver.\\n")
+            f.write(f"==================================================\\n\\n")
+        print(f"{COLOR_YELLOW}📝 O erro foi registrado em '{log_file}'.{COLOR_RESET}")
+    except Exception:
+        pass
+        
+    input(f"\\nPressione [ENTER] para fechar...")
+    sys.exit(1)
+
+# Firebase Project Configuration
+PROJECT_ID = "alemaozinho-system32"
+API_KEY = "AIzaSyB5qH8g-kcMv4yGqk7Krm5D_vbV26X-7XU"
+COLLECTION_NAME = "inventario_ativos"
+BASE_URL = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/{COLLECTION_NAME}"
+CONFIG_FILE = "agent_config.json"
+
+# Pre-configured Asset Tag (PWA automated deployment link)
+PRE_CONFIGURED_TAG = ""
+PRE_CONFIGURED_EMAIL = "mtr@mtr.com"
+PRE_CONFIGURED_PASSWORD = "mtr123"
+
+def get_tag_from_filename():
+    """Extracts tag from running filename (e.g. agent_PATR-SP-002.exe -> PATR-SP-002)"""
+    try:
+        filename = os.path.basename(sys.argv[0])
+        if "_" in filename:
+            parts = filename.split("_", 1)
+            if len(parts) > 1:
+                potential_tag = parts[1]
+                # Strip known extensions
+                for ext in [".exe", ".py", ".pyw", ".exe.", ".tar.gz", ".zip"]:
+                    if potential_tag.lower().endswith(ext):
+                        potential_tag = potential_tag[:-len(ext)]
+                potential_tag = potential_tag.strip()
+                # Exclude default configuration names
+                if potential_tag and not potential_tag.lower().startswith("config"):
+                    return potential_tag
+    except Exception:
+        pass
+    return ""
+
+def get_current_time():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def get_iso_timestamp():
+    return datetime.utcnow().isoformat() + "Z"
+
+def login_to_firebase(email, password):
+    """Authenticates operator via Firebase Auth REST API to get ID Token and Refresh Token."""
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={API_KEY}"
+    payload = {
+        "email": email,
+        "password": password,
+        "returnSecureToken": True
+    }
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            return {
+                "id_token": res_data.get("idToken"),
+                "refresh_token": res_data.get("refreshToken")
+            }
+    except Exception as e:
+        print(f"[{get_current_time()}] {COLOR_RED}Erro de Autenticação: E-mail ou Senha incorretos. ({e}){COLOR_RESET}")
+        return None
+
+def refresh_firebase_token(refresh_token):
+    """Refreshes Firebase ID Token using the Refresh Token."""
+    url = f"https://securetoken.googleapis.com/v1/token?key={API_KEY}"
+    payload = {
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token
+    }
+    data = urllib.parse.urlencode(payload).encode("utf-8")
+    try:
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": "Mozilla/5.0"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            return {
+                "id_token": res_data.get("id_token"),
+                "refresh_token": res_data.get("refresh_token")
+            }
+    except Exception as e:
+        print(f"[{get_current_time()}] {COLOR_RED}Erro ao renovar token de segurança: {e}{COLOR_RESET}")
+        return None
+
+def find_asset_by_tag(tag, id_token):
+    """Searches for asset document in Firestore collection by codigo_patrimonio_ou_tag."""
+    url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents:runQuery"
+    payload = {
+        "structuredQuery": {
+            "from": [{"collectionId": COLLECTION_NAME}],
+            "where": {
+                "fieldFilter": {
+                    "field": {"fieldPath": "codigo_patrimonio_ou_tag"},
+                    "op": "EQUAL",
+                    "value": {"stringValue": tag}
+                }
+            },
+            "limit": 1
+        }
+    }
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0",
+                "Authorization": f"Bearer {id_token}"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            if not res_data or not isinstance(res_data, list) or len(res_data) == 0:
+                return None
+            
+            first_result = res_data[0]
+            if "document" in first_result:
+                doc = first_result["document"]
+                doc_name = doc.get("name", "")
+                doc_id = doc_name.split("/")[-1]
+                fields = doc.get("fields", {})
+                brand_model = fields.get("marca_modelo", {}).get("stringValue", "Ativo de Hardware")
+                return {
+                    "id": doc_id,
+                    "marca_modelo": brand_model
+                }
+    except Exception as e:
+        print(f"[{get_current_time()}] {COLOR_RED}Erro ao buscar ativo por tag: {e}{COLOR_RESET}")
+    return None
+
+def save_config(doc_id, refresh_token, tag, brand_model):
+    config = {
+        "doc_id": doc_id,
+        "refresh_token": refresh_token,
+        "tag": tag,
+        "marca_modelo": brand_model
+    }
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=4, ensure_ascii=False)
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+    return None
+
+def get_logged_user():
+    for func in [os.getlogin, getpass.getuser]:
+        try:
+            u = func()
+            if u: return u
+        except Exception:
+            pass
+    return os.environ.get("USER", os.environ.get("USERNAME", "Desconhecido"))
+
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "127.0.0.1"
+
+def get_system_telemetry():
+    """Collects real-time performance telemetry."""
+    hostname = socket.gethostname()
+    os_platform = platform.system()
+    os_release = platform.release()
+    logged_user = get_logged_user()
+    ip_local = get_local_ip()
+    
+    # Smooth average of CPU usage over 1 second
+    cpu_percent = psutil.cpu_percent(interval=1)
+    
+    # Virtual Memory
+    ram = psutil.virtual_memory()
+    ram_total_gb = ram.total / (1024 ** 3)
+    ram_used_gb = ram.used / (1024 ** 3)
+    ram_percent = ram.percent
+    
+    # Main partition disk space
+    disk_path = "C:\\\\" if os_platform.startswith("Win") else "/"
+    try:
+        usage = psutil.disk_usage(disk_path)
+        disk_total_gb = usage.total / (1024 ** 3)
+        disk_free_gb = usage.free / (1024 ** 3)
+        disk_percent = usage.percent
+    except Exception:
+        disk_total_gb = 0.0
+        disk_free_gb = 0.0
+        disk_percent = 0.0
+        
+    return {
+        "hostname": hostname,
+        "os_platform": os_platform,
+        "os_release": os_release,
+        "logged_user": logged_user,
+        "ip_local": ip_local,
+        "cpu_percent": cpu_percent,
+        "ram_total_gb": ram_total_gb,
+        "ram_used_gb": ram_used_gb,
+        "ram_percent": ram_percent,
+        "disk_total_gb": disk_total_gb,
+        "disk_free_gb": disk_free_gb,
+        "disk_percent": disk_percent
+    }
+
+def update_asset_telemetry(doc_id, telemetry, id_token):
+    """Sends telemetry data payload to Firestore document fields using ID Token."""
+    url = f"{BASE_URL}/{doc_id}?updateMask.fieldPaths=online&updateMask.fieldPaths=last_seen&updateMask.fieldPaths=telemetria"
+    iso_time = get_iso_timestamp()
+    
+    payload = {
+        "fields": {
+            "online": {"booleanValue": True},
+            "last_seen": {"stringValue": iso_time},
+            "telemetria": {
+                "mapValue": {
+                    "fields": {
+                        "hostname": {"stringValue": telemetry["hostname"]},
+                        "os_platform": {"stringValue": telemetry["os_platform"]},
+                        "os_release": {"stringValue": telemetry["os_release"]},
+                        "logged_user": {"stringValue": telemetry["logged_user"]},
+                        "ip_local": {"stringValue": telemetry["ip_local"]},
+                        "cpu_percent": {"doubleValue": telemetry["cpu_percent"]},
+                        "ram_total_gb": {"doubleValue": telemetry["ram_total_gb"]},
+                        "ram_used_gb": {"doubleValue": telemetry["ram_used_gb"]},
+                        "ram_percent": {"doubleValue": telemetry["ram_percent"]},
+                        "disk_total_gb": {"doubleValue": telemetry["disk_total_gb"]},
+                        "disk_free_gb": {"doubleValue": telemetry["disk_free_gb"]},
+                        "disk_percent": {"doubleValue": telemetry["disk_percent"]},
+                        "last_seen": {"stringValue": iso_time}
+                    }
+                }
+            }
+        }
+    }
+    
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0",
+                "Authorization": f"Bearer {id_token}"
+            },
+            method="PATCH"
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return response.status == 200
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return "NOT_FOUND"
+        if e.code in [401, 403]:
+            # Token expired or unauthorized
+            return "EXPIRED"
+        print(f"[{get_current_time()}] {COLOR_RED}Erro HTTP ao enviar telemetria ({e.code}): {e.reason}{COLOR_RESET}")
+        return False
+    except Exception as e:
+        print(f"[{get_current_time()}] {COLOR_RED}Erro de rede ao enviar telemetria: {e}{COLOR_RESET}")
+        return False
+
+def recreate_asset_document(doc_id, tag, brand_model, telemetry, id_token):
+    """Recreates the asset document in Firestore with the same ID if it was deleted (Self-Healing)."""
+    url = f"{BASE_URL}/{doc_id}"
+    iso_time = get_iso_timestamp()
+    
+    payload = {
+        "fields": {
+            "codigo_patrimonio_ou_tag": {"stringValue": tag},
+            "marca_modelo": {"stringValue": brand_model},
+            "status": {"stringValue": "Disponível"},
+            "online": {"booleanValue": True},
+            "last_seen": {"stringValue": iso_time},
+            "telemetria": {
+                "mapValue": {
+                    "fields": {
+                        "hostname": {"stringValue": telemetry["hostname"]},
+                        "os_platform": {"stringValue": telemetry["os_platform"]},
+                        "os_release": {"stringValue": telemetry["os_release"]},
+                        "logged_user": {"stringValue": telemetry["logged_user"]},
+                        "ip_local": {"stringValue": telemetry["ip_local"]},
+                        "cpu_percent": {"doubleValue": telemetry["cpu_percent"]},
+                        "ram_total_gb": {"doubleValue": telemetry["ram_total_gb"]},
+                        "ram_used_gb": {"doubleValue": telemetry["ram_used_gb"]},
+                        "ram_percent": {"doubleValue": telemetry["ram_percent"]},
+                        "disk_total_gb": {"doubleValue": telemetry["disk_total_gb"]},
+                        "disk_free_gb": {"doubleValue": telemetry["disk_free_gb"]},
+                        "disk_percent": {"doubleValue": telemetry["disk_percent"]},
+                        "last_seen": {"stringValue": iso_time}
+                    }
+                }
+            }
+        }
+    }
+    
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0",
+                "Authorization": f"Bearer {id_token}"
+            },
+            method="PATCH"
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return response.status in [200, 201]
+    except Exception as e:
+        print(f"[{get_current_time()}] {COLOR_RED}Erro ao recriar ativo no Firestore: {e}{COLOR_RESET}")
+        return False
+
+def get_latest_asset_name(doc_id, id_token):
+    """Fetches the latest brand_model from Firestore to check for renames."""
+    url = f"{BASE_URL}/{doc_id}"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0",
+                "Authorization": f"Bearer {id_token}"
+            },
+            method="GET"
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            fields = res_data.get("fields", {})
+            brand_model = fields.get("marca_modelo", {}).get("stringValue", "")
+            return brand_model
+    except Exception as e:
+        print(f"[{get_current_time()}] {COLOR_RED}Erro ao obter nome atualizado do ativo: {e}{COLOR_RESET}")
+        return None
+
+def main():
+    print(f"{COLOR_CYAN}================================================================={COLOR_RESET}")
+    print(f"{COLOR_CYAN}      ALEMAOZINHOSYSTEM32 - AGENTE DE TELEMETRIA RMM ATIVO       {COLOR_RESET}")
+    print(f"{COLOR_CYAN}================================================================={COLOR_RESET}")
+    
+    config = load_config()
+    id_token = None
+    refresh_token = None
+    doc_id = None
+    tag = None
+    brand_model = None
+    
+    if config:
+        print(f"[{get_current_time()}] {COLOR_GREEN}Configuração existente encontrada!{COLOR_RESET}")
+        tag = config.get("tag")
+        brand_model = config.get("marca_modelo")
+        doc_id = config.get("doc_id")
+        refresh_token = config.get("refresh_token")
+        
+        print(f"🔍 Ativo Vinculado: {COLOR_MAGENTA}{brand_model}{COLOR_RESET} [{COLOR_YELLOW}{tag}{COLOR_RESET}]")
+        print(f"[{get_current_time()}] Solicitando token de segurança atualizado...")
+        
+        auth_data = refresh_firebase_token(refresh_token)
+        if auth_data:
+            id_token = auth_data["id_token"]
+            refresh_token = auth_data["refresh_token"]
+            save_config(doc_id, refresh_token, tag, brand_model)  # Update stored refresh token
+            print(f"[{get_current_time()}] {COLOR_GREEN}Autenticação restaurada com sucesso!{COLOR_RESET}\\n")
+        else:
+            print(f"[{get_current_time()}] {COLOR_RED}Falha ao restaurar autenticação automática.{COLOR_RESET}")
+            print(f"⚠️ Apague o arquivo '{CONFIG_FILE}' para reiniciar a vinculação manual.")
+            sys.exit(1)
+            
+    else:
+        print(f"{COLOR_YELLOW}🔐 Vinculação de Novo Ativo de Hardware (Primeira Execução){COLOR_RESET}")
+        tag_from_file = get_tag_from_filename()
+        
+        if PRE_CONFIGURED_TAG:
+            tag = PRE_CONFIGURED_TAG
+            print(f"📌 Tag Pré-configurada embutida detectada: {COLOR_GREEN}{tag}{COLOR_RESET}")
+        elif tag_from_file:
+            tag = tag_from_file
+            print(f"📌 Tag extraída do nome do arquivo detectada: {COLOR_GREEN}{tag}{COLOR_RESET}")
+        else:
+            tag = input("Digite o Patrimônio ou Tag do Ativo (ex: PATR-SP-002): ").strip()
+        
+        auth_data = None
+        email = ""
+        password = ""
+        
+        # Tentativa de autenticação automática com credenciais padrão embutidas
+        if PRE_CONFIGURED_EMAIL and PRE_CONFIGURED_PASSWORD:
+            print(f"[{get_current_time()}] Autenticando automaticamente com credenciais padrão...", end="", flush=True)
+            auth_data = login_to_firebase(PRE_CONFIGURED_EMAIL, PRE_CONFIGURED_PASSWORD)
+            if auth_data:
+                email = PRE_CONFIGURED_EMAIL
+                password = PRE_CONFIGURED_PASSWORD
+                print(f" {COLOR_GREEN}SUCESSO!{COLOR_RESET}")
+        
+        # Opção A Fallback: se não tiver credenciais padrão ou se a autenticação automática falhou
+        if not auth_data:
+            if PRE_CONFIGURED_EMAIL and PRE_CONFIGURED_PASSWORD:
+                print(f" {COLOR_YELLOW}FALHA nas credenciais padrão.{COLOR_RESET}")
+                print(f"{COLOR_YELLOW}Por favor, insira as credenciais atualizadas manualmente.{COLOR_RESET}")
+            
+            email = input("Digite seu e-mail de acesso corporativo: ").strip()
+            password = getpass.getpass("Digite sua senha de acesso corporativo: ").strip()
+            print()
+            
+            print(f"[{get_current_time()}] Autenticando com o Firebase...", end="", flush=True)
+            auth_data = login_to_firebase(email, password)
+            if not auth_data:
+                print(f" {COLOR_RED}FALHA{COLOR_RESET}")
+                print(f"\\n{COLOR_RED}Impossível prosseguir sem credenciais válidas. Encerrando.{COLOR_RESET}")
+                sys.exit(1)
+            print(f" {COLOR_GREEN}SUCESSO!{COLOR_RESET}")
+        
+        id_token = auth_data["id_token"]
+        refresh_token = auth_data["refresh_token"]
+        
+        print(f"[{get_current_time()}] Buscando ativo técnico correspondente à tag '{tag}'...", end="", flush=True)
+        asset_info = find_asset_by_tag(tag, id_token)
+        
+        if not asset_info:
+            print(f" {COLOR_RED}NÃO ENCONTRADO{COLOR_RESET}")
+            print(f"\\n{COLOR_RED}Nenhum ativo com a Tag '{tag}' foi localizado no Firestore.{COLOR_RESET}")
+            print(f"{COLOR_YELLOW}Cadastre o ativo no painel web primeiro antes de rodar o agente.{COLOR_RESET}")
+            sys.exit(1)
+            
+        doc_id = asset_info["id"]
+        brand_model = asset_info["marca_modelo"]
+        print(f" {COLOR_GREEN}ENCONTRADO: {brand_model}{COLOR_RESET}")
+        
+        # Save credentials to config JSON securely
+        save_config(doc_id, refresh_token, tag, brand_model)
+        print(f"[{get_current_time()}] Configurações de vinculação salvas localmente em '{CONFIG_FILE}'.\\n")
+        
+    print(f"[{get_current_time()}] Agente RMM ativado. Coletando e reportando telemetria a cada 15 segundos...")
+    print(f"Pressione Ctrl+C para encerrar o agente.")
+    print(f"{COLOR_CYAN}-----------------------------------------------------------------{COLOR_RESET}")
+    
+    last_refresh_time = time.time()
+    last_name_check_time = time.time()
+    
+    while True:
+        # Check if ID token is close to expiry (50 minutes)
+        if time.time() - last_refresh_time > 3000:
+            print(f"\\n[{get_current_time()}] {COLOR_YELLOW}Renovando token de segurança programado...{COLOR_RESET}", end="", flush=True)
+            auth_data = refresh_firebase_token(refresh_token)
+            if auth_data:
+                id_token = auth_data["id_token"]
+                refresh_token = auth_data["refresh_token"]
+                save_config(doc_id, refresh_token, tag, brand_model)
+                last_refresh_time = time.time()
+                print(f" {COLOR_GREEN}RENOVADO{COLOR_RESET}")
+            else:
+                print(f" {COLOR_RED}FALHA{COLOR_RESET}")
+                
+        # Check if 120 minutes have passed to check for brand/model rename (7200 seconds)
+        if time.time() - last_name_check_time > 7200:
+            print(f"\\n[{get_current_time()}] 🔍 Verificando atualização de nome do ativo na nuvem...", end="", flush=True)
+            new_name = get_latest_asset_name(doc_id, id_token)
+            if new_name and new_name != brand_model:
+                print(f" {COLOR_GREEN}ATUALIZADO{COLOR_RESET}")
+                print(f"🔄 Nome alterado de '{brand_model}' para '{new_name}'. Atualizando configurações locais...")
+                brand_model = new_name
+                save_config(doc_id, refresh_token, tag, brand_model)
+            else:
+                print(f" {COLOR_YELLOW}SEM ALTERAÇÕES{COLOR_RESET}")
+            last_name_check_time = time.time()
+                
+        # Gather local metrics
+        telemetry = get_system_telemetry()
+        
+        # Print metrics beautifully on the console
+        print(f"\\n[{get_current_time()}] 📊 Métricas Locais para {COLOR_MAGENTA}{telemetry['hostname']}{COLOR_RESET}:")
+        print(f"  🖥️  CPU:  {COLOR_CYAN}{telemetry['cpu_percent']:.1f}%{COLOR_RESET}")
+        print(f"  💾 RAM:  {COLOR_CYAN}{telemetry['ram_used_gb']:.2f} GB{COLOR_RESET} / {telemetry['ram_total_gb']:.1f} GB ({telemetry['ram_percent']}%)")
+        print(f"  💽 Disk: {COLOR_CYAN}{telemetry['disk_free_gb']:.1f} GB Livre{COLOR_RESET} de {telemetry['disk_total_gb']:.1f} GB ({telemetry['disk_percent']}% Usado)")
+        print(f"  🌐 Rede: IP {COLOR_YELLOW}{telemetry['ip_local']}{COLOR_RESET} | Usuário: {COLOR_GREEN}{telemetry['logged_user']}{COLOR_RESET}")
+        
+        # Send Patch Request to Firestore
+        print(f"  🚀 Enviando telemetria para o painel RMM...", end="", flush=True)
+        res = update_asset_telemetry(doc_id, telemetry, id_token)
+        
+        if res == "EXPIRED":
+            # Token expired unexpectedly, try to refresh immediately and retry
+            print(f" {COLOR_YELLOW}EXPIRADO (Renovando imediato)...{COLOR_RESET}", end="", flush=True)
+            auth_data = refresh_firebase_token(refresh_token)
+            if auth_data:
+                id_token = auth_data["id_token"]
+                refresh_token = auth_data["refresh_token"]
+                save_config(doc_id, refresh_token, tag, brand_model)
+                last_refresh_time = time.time()
+                # Retry update
+                res = update_asset_telemetry(doc_id, telemetry, id_token)
+                
+        if res == "NOT_FOUND":
+            print(f" {COLOR_RED}DOCUMENTO EXCLUÍDO{COLOR_RESET}")
+            print(f"⚠️  O ativo correspondente foi excluído do inventário! Executando rotina de autorecuperação (Self-Healing)...")
+            recreate_res = recreate_asset_document(doc_id, tag, brand_model, telemetry, id_token)
+            if recreate_res:
+                print(f"🟢 Ativo [{COLOR_MAGENTA}{brand_model}{COLOR_RESET}] com Tag [{COLOR_YELLOW}{tag}{COLOR_RESET}] recriado no Firestore com sucesso como 'Disponível'!")
+            else:
+                print(f"🔴 Falha crítica ao tentar recriar ativo excluído.")
+        elif res is True:
+            print(f" {COLOR_GREEN}SUCESSO{COLOR_RESET}")
+        else:
+            print(f" {COLOR_RED}FALHOU{COLOR_RESET}")
+            
+        time.sleep(15)
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print(f"\\n[{get_current_time()}] {COLOR_RED}Agente RMM encerrado pelo operador. Saindo...{COLOR_RESET}")
+    except Exception as e:
+        import traceback
+        err_msg = traceback.format_exc()
+        
+        # Check if the error is due to running as system service without initial configuration
+        extra_note = ""
+        e_str = str(e).lower()
+        if isinstance(e, EOFError) or "stdin" in e_str or "getpass" in e_str or "io.unsupportedoperation" in e_str:
+            extra_note = (
+                "\\n💡 DICA DE TI: Este erro geralmente ocorre porque o agente foi iniciado como Servico de Sistema "
+                "antes de ser vinculado de forma interativa.\\n"
+                "👉 Por favor, execute o agente de forma interativa (duplo clique ou via terminal) UMA UNICA VEZ "
+                "para realizar a vinculacao do ativo e salvar as credenciais corporativas.\\n"
+                "Após a criacao do arquivo 'agent_config.json', o servico podera ser iniciado em segundo plano com sucesso!\\n"
+            )
+            
+        # Print error details to the operator
+        print(f"\\n{COLOR_RED}❌ ERRO CRÍTICO FATAL NO AGENTE RMM:{COLOR_RESET}")
+        print(err_msg)
+        if extra_note:
+            print(f"{COLOR_YELLOW}{extra_note}{COLOR_RESET}")
+        
+        # Save error traceback to local log file
+        log_file = "agent_error.log"
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"==================================================\\n")
+                f.write(f"TIMESTAMP: {get_current_time()}\\n")
+                f.write(f"PLATFORM: {platform.system()} {platform.release()}\\n")
+                f.write(f"ERROR DETAILS:\\n{err_msg}\\n")
+                if extra_note:
+                    f.write(f"DIAGNOSTIC NOTE:\\n{extra_note}\\n")
+                f.write(f"==================================================\\n\\n")
+            print(f"{COLOR_YELLOW}📝 O log de erro detalhado foi gravado em '{log_file}' para análise.{COLOR_RESET}")
+        except Exception as log_err:
+            print(f"Erro ao salvar arquivo de log '{log_file}': {log_err}")
+            
+        # Prevent prompt from closing immediately
+        try:
+            input(f"\\n{COLOR_CYAN}Pressione [ENTER] para fechar...{COLOR_RESET}")
+        except Exception:
+            pass
+`;
+
+function downloadPreConfiguredAgent(assetId, format = "py") {
+    const asset = assets.find(a => a.id === assetId);
+    if (!asset) {
+        showToast("Ativo não encontrado.", "error");
+        return;
+    }
+    
+    const tagValue = asset.codigo_patrimonio_ou_tag || "";
+    if (!tagValue) {
+        showToast("Este ativo não possui uma tag/patrimônio vinculada.", "warning");
+        return;
+    }
+    
+    const safeTag = tagValue.replace(/[^a-zA-Z0-9-_]/g, "_");
+    
+    if (format === "exe") {
+        showToast("Baixando executável do servidor...", "info");
+        
+        fetch("agent.exe")
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("O executável 'agent.exe' não foi encontrado na pasta raiz.");
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `agent_${safeTag}.exe`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast(`Executável pré-configurado [agent_${safeTag}.exe] baixado com sucesso!`, "success");
+            })
+            .catch(err => {
+                console.warn("Fetch do executável bloqueado ou falhou. Tentando download direto de contingência...", err);
+                
+                // Contingência: Tenta download direto usando <a> nativo sem passar pelo fetch (evita CORS do file:///)
+                try {
+                    const a = document.createElement("a");
+                    a.href = "agent.exe";
+                    a.download = `agent_${safeTag}.exe`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    showToast("Tentando download direto do 'agent.exe' local...", "warning");
+                    showToast("👉 Nota: Certifique-se de compilar o 'agent.py' e colocá-lo na pasta raiz como 'agent.exe'!", "info");
+                } catch (fallbackErr) {
+                    console.error("Fallback falhou:", fallbackErr);
+                    showToast("Erro ao baixar executável: " + err.message, "error");
+                }
+            });
+    } else {
+        showToast("Gerando script pré-configurado...", "info");
+        
+        fetch("agent.py")
+            .then(response => response.ok ? response.text() : "")
+            .catch(fetchErr => {
+                console.warn("Fetch local falhou (comum em protocolo file:///). Usando baseline incorporado.", fetchErr);
+                return "";
+            })
+            .then(code => {
+                if (!code) {
+                    code = AGENT_BASELINE_CODE;
+                }
+                
+                code = code.replace('PRE_CONFIGURED_TAG = ""', `PRE_CONFIGURED_TAG = "${tagValue}"`);
+                
+                const blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `agent_${safeTag}.py`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast(`Agente pré-configurado para [${tagValue}] baixado com sucesso!`, "success");
+            })
+            .catch(e => {
+                console.error(e);
+                showToast("Erro ao baixar agente: " + e.message, "error");
+            });
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
