@@ -3357,6 +3357,13 @@ function renderInventoryAssets() {
                 <!-- Technical Details -->
                 <div class="mt-4 pt-3 border-t border-white/5 space-y-1.5 text-xs text-slate-300">
                     <div class="flex justify-between font-mono">
+                        <span class="text-slate-500 font-semibold">Endereço IP:</span>
+                        <span class="text-slate-300 font-bold flex items-center gap-1">
+                            <span class="h-2 w-2 rounded-full ${a.online ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}" title="${a.online ? 'Online' : 'Offline'}"></span>
+                            ${a.ip_local || "-"}
+                        </span>
+                    </div>
+                    <div class="flex justify-between font-mono">
                         <span class="text-slate-500 font-semibold">Série:</span>
                         <span class="text-slate-300 font-bold">${a.numero_serie || "-"}</span>
                     </div>
@@ -3488,6 +3495,9 @@ function openHardwareAssetModal(assetId = null) {
             document.getElementById("hard-data-aquisicao").value = asset.data_aquisicao || "";
             document.getElementById("hard-valor").value = asset.valor_estimado || "";
             document.getElementById("hard-notas").value = asset.notas || "";
+            if (document.getElementById("hard-ip")) {
+                document.getElementById("hard-ip").value = asset.ip_local || "";
+            }
             const loginInput = document.getElementById("hard-login");
             if (loginInput) loginInput.value = asset.usuario_acesso || "";
 
@@ -3533,6 +3543,7 @@ async function handleHardwareSubmit(e) {
     const notas = document.getElementById("hard-notas").value;
     const senha = document.getElementById("hard-senha").value;
     const login = document.getElementById("hard-login") ? document.getElementById("hard-login").value.trim() : "";
+    const ip_local = document.getElementById("hard-ip") ? document.getElementById("hard-ip").value.trim() : "";
 
     try {
         let oldAsset = assetId ? assets.find(a => a.id === assetId) : null;
@@ -3577,6 +3588,7 @@ async function handleHardwareSubmit(e) {
             usuario_acesso: login,
             senha_criptografada: finalSenhaCrip,
             setor: document.getElementById("hard-setor") ? document.getElementById("hard-setor").value.trim() : "",
+            ip_local: ip_local,
             url_foto: photoTempUrl
         };
 
