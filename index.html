@@ -1032,7 +1032,7 @@
 
             <!-- Search and Filter Bar -->
             <div class="glass rounded-2xl p-4 lg:p-6 border border-white/5 shadow-xl">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                     <!-- Real-time search -->
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -1080,6 +1080,17 @@
                         <select id="inv-filter-filial" onchange="applyInventoryFilters()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-cyan transition duration-250 appearance-none">
                             <option value="">Localização: Todas</option>
                             <option value="central">Estoque Central</option>
+                            <!-- Populado dinamicamente -->
+                        </select>
+                    </div>
+
+                    <!-- Setor filter -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="layers" class="h-4 w-4"></i>
+                        </span>
+                        <select id="inv-filter-setor" onchange="applyInventoryFilters()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-cyan transition duration-250 appearance-none">
+                            <option value="">Setor: Todos</option>
                             <!-- Populado dinamicamente -->
                         </select>
                     </div>
@@ -1836,18 +1847,18 @@
                          <input type="text" id="hard-tag" placeholder="Deixe vazio para gerar automaticamente (PAT-YYYYMMDD-XXXX)" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-cyan">
                      </div>
                      <div>
-                         <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Categoria *</label>
-                         <div class="relative w-full">
-                             <select id="hard-categoria" required onchange="handleCategorySelection(this)" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-cyan appearance-none">
-                                 <option value="Computador">Computador</option>
-                                 <option value="Monitor">Monitor</option>
-                                 <option value="Impressora">Impressora</option>
-                                 <option value="Câmera/DVR">Câmera/DVR</option>
-                                 <option value="Switch/Roteador">Switch/Roteador</option>
-                                 <option value="Periféricos">Periféricos</option>
-                                 <option value="Outros">Outros</option>
-                             </select>
-                         </div>
+                          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Categoria *</label>
+                          <input type="text" id="hard-categoria" required list="categoria-datalist" oninput="handleCategoryInput(this)" placeholder="Ex: Computador, Monitor..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-cyan">
+                          <datalist id="categoria-datalist">
+                              <option value="Computador"></option>
+                              <option value="Monitor"></option>
+                              <option value="Impressora"></option>
+                              <option value="Câmera/DVR"></option>
+                              <option value="Switch/Roteador"></option>
+                              <option value="Periféricos"></option>
+                              <option value="Outros"></option>
+                              <option value="+ Adicionar Nova Categoria"></option>
+                          </datalist>
                      </div>
                  </div>
 

@@ -3307,13 +3307,15 @@ function renderInventoryAssets() {
     const catEl = document.getElementById("inv-filter-categoria");
     const statusEl = document.getElementById("inv-filter-status");
     const filialEl = document.getElementById("inv-filter-filial");
+    const setorEl = document.getElementById("inv-filter-setor");
 
-    if (!searchEl || !catEl || !statusEl || !filialEl) return;
+    if (!searchEl || !catEl || !statusEl || !filialEl || !setorEl) return;
 
     const searchVal = searchEl.value.toLowerCase().trim();
     const catVal = catEl.value;
     const statusVal = statusEl.value;
     const filialVal = filialEl.value;
+    const setorVal = setorEl.value;
 
     let filtered = [...assets];
 
@@ -3339,6 +3341,10 @@ function renderInventoryAssets() {
         } else {
             filtered = filtered.filter(a => a.id_filial_atual === filialVal);
         }
+    }
+
+    if (setorVal) {
+        filtered = filtered.filter(a => a.setor === setorVal);
     }
 
     if (filtered.length === 0) {
@@ -5385,39 +5391,28 @@ function listenConfiguracoesGerais() {
 }
 
 function populateCategoriesUI() {
-    // Populate #hard-categoria select
-    const hardCat = document.getElementById("hard-categoria");
-    if (hardCat) {
-        const savedVal = hardCat.value;
-        hardCat.innerHTML = "";
+    // Populate #categoria-datalist datalist
+    const list = document.getElementById("categoria-datalist");
+    if (list) {
+        list.innerHTML = "";
         customCategories.forEach(cat => {
             const opt = document.createElement("option");
             opt.value = cat;
-            opt.textContent = cat;
-            hardCat.appendChild(opt);
+            list.appendChild(opt);
         });
 
         // Add "+ Adicionar Nova Categoria" option at the end of the list
         const addOpt = document.createElement("option");
-        addOpt.value = "__ADD_NEW__";
-        addOpt.textContent = "+ Adicionar Nova Categoria";
-        addOpt.style.color = "#22d3ee"; // accent-cyan
-        addOpt.style.fontWeight = "bold";
-        hardCat.appendChild(addOpt);
+        addOpt.value = "+ Adicionar Nova Categoria";
+        list.appendChild(addOpt);
+    }
 
-        if (categoryToSelectAfterSync && customCategories.includes(categoryToSelectAfterSync)) {
-            hardCat.value = categoryToSelectAfterSync;
-            hardCat.dataset.lastVal = categoryToSelectAfterSync;
-            categoryToSelectAfterSync = null;
-        } else if (customCategories.includes(savedVal)) {
-            hardCat.value = savedVal;
-            hardCat.dataset.lastVal = savedVal;
-        } else {
-            if (customCategories.length > 0) {
-                hardCat.value = customCategories[0];
-                hardCat.dataset.lastVal = customCategories[0];
-            }
-        }
+    // Restore or update the category input if we just added a new category
+    const hardCat = document.getElementById("hard-categoria");
+    if (hardCat && categoryToSelectAfterSync && customCategories.includes(categoryToSelectAfterSync)) {
+        hardCat.value = categoryToSelectAfterSync;
+        hardCat.dataset.lastVal = categoryToSelectAfterSync;
+        categoryToSelectAfterSync = null;
     }
 
     // Populate #inv-filter-categoria select
@@ -5454,6 +5449,22 @@ function populateSectorsUI() {
         list.appendChild(addOpt);
     }
 
+    // Populate #inv-filter-setor select
+    const filterSec = document.getElementById("inv-filter-setor");
+    if (filterSec) {
+        const savedVal = filterSec.value;
+        filterSec.innerHTML = '<option value="">Setor: Todos</option>';
+        customSectors.forEach(sec => {
+            const opt = document.createElement("option");
+            opt.value = sec;
+            opt.textContent = sec;
+            filterSec.appendChild(opt);
+        });
+        if (savedVal && customSectors.includes(savedVal)) {
+            filterSec.value = savedVal;
+        }
+    }
+
     // Restore or update the sector input if we just added a new sector
     const hardSetor = document.getElementById("hard-setor");
     if (hardSetor && sectorToSelectAfterSync && customSectors.includes(sectorToSelectAfterSync)) {
@@ -5463,20 +5474,20 @@ function populateSectorsUI() {
     }
 }
 
-function handleCategorySelection(select) {
-    const val = select.value;
-    if (val === "__ADD_NEW__") {
-        const prevVal = select.dataset.lastVal || "";
+function handleCategoryInput(input) {
+    const val = input.value;
+    if (val === "+ Adicionar Nova Categoria") {
+        const prevVal = input.dataset.lastVal || "";
         const nova = prompt("Digite o nome da nova Categoria:");
         if (!nova || !nova.trim()) {
-            select.value = prevVal;
+            input.value = prevVal;
             return;
         }
         const cat = nova.trim();
         if (customCategories.includes(cat)) {
             showToast("Esta categoria já existe!", "warning");
-            select.value = cat;
-            select.dataset.lastVal = cat;
+            input.value = cat;
+            input.dataset.lastVal = cat;
             return;
         }
         
@@ -5488,10 +5499,10 @@ function handleCategorySelection(select) {
             })
             .catch(e => {
                 showToast("Erro ao salvar categoria: " + e.message, "error");
-                select.value = prevVal;
+                input.value = prevVal;
             });
     } else {
-        select.dataset.lastVal = val;
+        input.dataset.lastVal = val;
     }
 }
 
