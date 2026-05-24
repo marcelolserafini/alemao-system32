@@ -462,7 +462,7 @@ function renderBoard() {
         const toggleBtnIcon = document.getElementById(`btn-col-toggle-${status.replace(/\s+/g, '-')}`);
         if (toggleBtnIcon) {
             if (activeMode === 'list') {
-                toggleBtnIcon.setAttribute("data-lucide", "trello");
+                toggleBtnIcon.setAttribute("data-lucide", "kanban");
                 toggleBtnIcon.parentElement.setAttribute("title", "Mudar para Modo Cards");
             } else {
                 toggleBtnIcon.setAttribute("data-lucide", "list");
@@ -818,11 +818,11 @@ async function handleFilialSubmit(e) {
     const estado = document.getElementById("fil-estado").value.trim().toUpperCase();
     let prefixo = document.getElementById("fil-prefixo").value.trim().toUpperCase();
 
-    // Clean prefix: only allow alphabetic A-Z, up to 4 characters
-    prefixo = prefixo.replace(/[^A-Z]/g, '').slice(0, 4);
+    // Clean prefix: only allow alphanumeric A-Z and 0-9, up to 4 characters
+    prefixo = prefixo.replace(/[^A-Z0-9]/g, '').slice(0, 4);
 
-    if (prefixo.length > 0 && prefixo.length < 4) {
-        showToast("O prefixo de patrimônio deve conter exatamente 4 letras.", "error");
+    if (prefixo.length === 0) {
+        showToast("O prefixo de patrimônio não pode ser vazio.", "error");
         return;
     }
 
@@ -3482,11 +3482,20 @@ function renderInventoryAssets() {
                             <span>Ver RMM</span>
                         </button>
                     ` : ""}
+                    ${a.meshcentral_url ? `
+                        <button onclick="openMeshCentralModal('${a.id}')" class="flex items-center space-x-1.5 px-2 py-2 bg-accent-emerald/15 hover:bg-accent-emerald/25 border border-accent-emerald/20 text-accent-emerald rounded-lg transition shadow shadow-accent-emerald/5 text-[10px] font-bold animate-pulse" title="Iniciar Suporte Remoto MeshCentral">
+                            <i data-lucide="monitor-play" class="h-3.5 w-3.5 text-accent-emerald"></i>
+                            <span>Suporte Remoto</span>
+                        </button>
+                    ` : ""}
                 </div>
 
                 <div class="flex gap-1.5">
                     <button onclick="downloadPreConfiguredAgent('${a.id}', 'py')" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition" title="Baixar Script Python (.py) Pré-configurado">
                         <i data-lucide="file-code" class="h-3.5 w-3.5 text-accent-cyan"></i>
+                    </button>
+                    <button onclick="downloadPreConfiguredAgent('${a.id}', 'bat')" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition" title="Baixar Inicializador (.txt) - Renomeie para .bat para executar">
+                        <i data-lucide="terminal" class="h-3.5 w-3.5 text-accent-emerald"></i>
                     </button>
                     ${canEdit ? `
                         <button onclick="openHardwareAssetModal('${a.id}')" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition" title="Editar Ativo">
@@ -3545,7 +3554,19 @@ function openHardwareAssetModal(assetId = null) {
         document.getElementById("modal-hardware-title").textContent = "Editar Ativo de Hardware";
         if (asset) {
             document.getElementById("hard-tag").value = asset.codigo_patrimonio_ou_tag;
-            document.getElementById("hard-categoria").value = asset.categoria;
+            
+            const catSelect = document.getElementById("hard-categoria");
+            if (catSelect) {
+                catSelect.value = asset.categoria;
+                catSelect.dataset.lastVal = asset.categoria;
+            }
+
+            const sectorInput = document.getElementById("hard-setor");
+            if (sectorInput) {
+                sectorInput.value = asset.setor || "";
+                sectorInput.dataset.lastVal = asset.setor || "";
+            }
+
             document.getElementById("hard-marca-modelo").value = asset.marca_modelo;
             document.getElementById("hard-serial").value = asset.numero_serie || "";
             document.getElementById("hard-status").value = asset.status;
@@ -3575,6 +3596,18 @@ function openHardwareAssetModal(assetId = null) {
     } else {
         document.getElementById("modal-hardware-title").textContent = "Cadastrar Ativo de Hardware";
         removeHardFoto();
+        
+        const catSelect = document.getElementById("hard-categoria");
+        if (catSelect) {
+            catSelect.value = customCategories[0] || "";
+            catSelect.dataset.lastVal = catSelect.value;
+        }
+
+        const sectorInput = document.getElementById("hard-setor");
+        if (sectorInput) {
+            sectorInput.value = "";
+            sectorInput.dataset.lastVal = "";
+        }
     }
 
     const modal = document.getElementById("modal-hardware");
@@ -4296,6 +4329,9 @@ import socket
 import platform
 from datetime import datetime
 
+# Script directory global path
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Visual styling indicators
 COLOR_GREEN = "\\033[92m"
 COLOR_RED = "\\033[91m"
@@ -4321,8 +4357,11 @@ except ImportError:
     print(f"{COLOR_YELLOW}Por favor, instale-a executando o comando:{COLOR_RESET}")
     print(f"👉 {COLOR_CYAN}pip install psutil{COLOR_RESET}\\n")
     
+    # Script directory
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    
     # Log dependency error
-    log_file = "agent_error.log"
+    log_file = os.path.join(SCRIPT_DIR, "agent_error.log")
     try:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(f"==================================================\\n")
@@ -4341,9 +4380,10 @@ import os
 def load_env():
     """Reads local .env file key-value pairs (avoiding python-dotenv dependency)."""
     env = {}
-    if os.path.exists(".env"):
+    env_path = os.path.join(SCRIPT_DIR, ".env")
+    if os.path.exists(env_path):
         try:
-            with open(".env", "r", encoding="utf-8") as f:
+            with open(env_path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#") and "=" in line:
@@ -4361,7 +4401,7 @@ PROJECT_ID = "alemaozinho-system32"
 API_KEY = env_vars.get("FIREBASE_API_KEY", "AIzaSyB5qH8g-kcMv4yGqk7Krm5D_vbV26X-7XU")
 COLLECTION_NAME = "inventario_ativos"
 BASE_URL = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/{COLLECTION_NAME}"
-CONFIG_FILE = "agent_config.json"
+CONFIG_FILE = os.path.join(SCRIPT_DIR, "agent_config.json")
 
 # Pre-configured Asset Tag (PWA automated deployment link)
 PRE_CONFIGURED_TAG = ""
@@ -4488,22 +4528,48 @@ def find_asset_by_tag(tag, id_token):
                 doc_name = doc.get("name", "")
                 doc_id = doc_name.split("/")[-1]
                 fields = doc.get("fields", {})
-                brand_model = fields.get("marca_modelo", {}).get("stringValue", "Ativo de Hardware")
+                
+                # Extract flat metadata to back up in agent_config.json
+                metadata = {}
+                for k, v in fields.items():
+                    if not isinstance(v, dict):
+                        continue
+                    for val_type, raw_val in v.items():
+                        if val_type == "stringValue":
+                            metadata[k] = raw_val
+                        elif val_type in ["integerValue", "doubleValue"]:
+                            try:
+                                metadata[k] = float(raw_val)
+                            except ValueError:
+                                metadata[k] = raw_val
+                        elif val_type == "booleanValue":
+                            metadata[k] = bool(raw_val)
+                
+                brand_model = metadata.get("marca_modelo", "Ativo de Hardware")
                 return {
                     "id": doc_id,
-                    "marca_modelo": brand_model
+                    "marca_modelo": brand_model,
+                    "metadata": metadata
                 }
     except Exception as e:
         print(f"[{get_current_time()}] {COLOR_RED}Erro ao buscar ativo por tag: {e}{COLOR_RESET}")
     return None
 
-def save_config(doc_id, refresh_token, tag, brand_model):
+def save_config(doc_id, refresh_token, tag, brand_model, metadata=None):
     config = {
         "doc_id": doc_id,
         "refresh_token": refresh_token,
         "tag": tag,
         "marca_modelo": brand_model
     }
+    if metadata:
+        config["metadata"] = metadata
+    else:
+        # Preserve existing metadata if we are just updating the token
+        old_config = load_config()
+        if old_config and "metadata" in old_config:
+            config["metadata"] = old_config["metadata"]
+            
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=4, ensure_ascii=False)
 
@@ -4585,7 +4651,7 @@ def get_system_telemetry():
 
 def update_asset_telemetry(doc_id, telemetry, id_token):
     """Sends telemetry data payload to Firestore document fields using ID Token."""
-    url = f"{BASE_URL}/{doc_id}?updateMask.fieldPaths=online&updateMask.fieldPaths=last_seen&updateMask.fieldPaths=telemetria"
+    url = f"{BASE_URL}/{doc_id}?updateMask.fieldPaths=online&updateMask.fieldPaths=last_seen&updateMask.fieldPaths=telemetria&currentDocument.exists=true"
     iso_time = get_iso_timestamp()
     
     payload = {
@@ -4628,7 +4694,7 @@ def update_asset_telemetry(doc_id, telemetry, id_token):
         with urllib.request.urlopen(req, timeout=10) as response:
             return response.status == 200
     except urllib.error.HTTPError as e:
-        if e.code == 404:
+        if e.code in [404, 412]:
             return "NOT_FOUND"
         if e.code in [401, 403]:
             # Token expired or unauthorized
@@ -4639,38 +4705,52 @@ def update_asset_telemetry(doc_id, telemetry, id_token):
         print(f"[{get_current_time()}] {COLOR_RED}Erro de rede ao enviar telemetria: {e}{COLOR_RESET}")
         return False
 
-def recreate_asset_document(doc_id, tag, brand_model, telemetry, id_token):
+def recreate_asset_document(doc_id, tag, brand_model, telemetry, id_token, backup_metadata=None):
     """Recreates the asset document in Firestore with the same ID if it was deleted (Self-Healing)."""
     url = f"{BASE_URL}/{doc_id}"
     iso_time = get_iso_timestamp()
     
-    payload = {
-        "fields": {
-            "codigo_patrimonio_ou_tag": {"stringValue": tag},
-            "marca_modelo": {"stringValue": brand_model},
-            "status": {"stringValue": "Disponível"},
-            "online": {"booleanValue": True},
-            "last_seen": {"stringValue": iso_time},
-            "telemetria": {
-                "mapValue": {
-                    "fields": {
-                        "hostname": {"stringValue": telemetry["hostname"]},
-                        "os_platform": {"stringValue": telemetry["os_platform"]},
-                        "os_release": {"stringValue": telemetry["os_release"]},
-                        "logged_user": {"stringValue": telemetry["logged_user"]},
-                        "ip_local": {"stringValue": telemetry["ip_local"]},
-                        "cpu_percent": {"doubleValue": telemetry["cpu_percent"]},
-                        "ram_total_gb": {"doubleValue": telemetry["ram_total_gb"]},
-                        "ram_used_gb": {"doubleValue": telemetry["ram_used_gb"]},
-                        "ram_percent": {"doubleValue": telemetry["ram_percent"]},
-                        "disk_total_gb": {"doubleValue": telemetry["disk_total_gb"]},
-                        "disk_free_gb": {"doubleValue": telemetry["disk_free_gb"]},
-                        "disk_percent": {"doubleValue": telemetry["disk_percent"]},
-                        "last_seen": {"stringValue": iso_time}
-                    }
+    fields_payload = {
+        "codigo_patrimonio_ou_tag": {"stringValue": tag},
+        "marca_modelo": {"stringValue": brand_model},
+        "status": {"stringValue": "Disponível"},
+        "online": {"booleanValue": True},
+        "last_seen": {"stringValue": iso_time},
+        "telemetria": {
+            "mapValue": {
+                "fields": {
+                    "hostname": {"stringValue": telemetry["hostname"]},
+                    "os_platform": {"stringValue": telemetry["os_platform"]},
+                    "os_release": {"stringValue": telemetry["os_release"]},
+                    "logged_user": {"stringValue": telemetry["logged_user"]},
+                    "ip_local": {"stringValue": telemetry["ip_local"]},
+                    "cpu_percent": {"doubleValue": telemetry["cpu_percent"]},
+                    "ram_total_gb": {"doubleValue": telemetry["ram_total_gb"]},
+                    "ram_used_gb": {"doubleValue": telemetry["ram_used_gb"]},
+                    "ram_percent": {"doubleValue": telemetry["ram_percent"]},
+                    "disk_total_gb": {"doubleValue": telemetry["disk_total_gb"]},
+                    "disk_free_gb": {"doubleValue": telemetry["disk_free_gb"]},
+                    "disk_percent": {"doubleValue": telemetry["disk_percent"]},
+                    "last_seen": {"stringValue": iso_time}
                 }
             }
         }
+    }
+    
+    # Merge and restore all original flat fields from backup_metadata
+    if backup_metadata:
+        for k, v in backup_metadata.items():
+            if k in ["telemetria", "online", "last_seen"]:
+                continue
+            if isinstance(v, bool):
+                fields_payload[k] = {"booleanValue": v}
+            elif isinstance(v, (int, float)):
+                fields_payload[k] = {"doubleValue": v}
+            elif v is not None:
+                fields_payload[k] = {"stringValue": str(v)}
+                
+    payload = {
+        "fields": fields_payload
     }
     
     try:
@@ -4718,6 +4798,13 @@ def main():
     print(f"{COLOR_CYAN}================================================================={COLOR_RESET}")
     
     config = load_config()
+    
+    # If a pre-configured tag is embedded, and it differs from the existing config, we ignore the config
+    if config and PRE_CONFIGURED_TAG and config.get("tag") != PRE_CONFIGURED_TAG:
+        print(f"[{get_current_time()}] {COLOR_YELLOW}Nova Tag Pré-configurada '{PRE_CONFIGURED_TAG}' detectada.{COLOR_RESET}")
+        print(f"🔄 Reconfigurando agente para o novo ativo (sobrepondo '{config.get('tag')}')...")
+        config = None
+        
     id_token = None
     refresh_token = None
     doc_id = None
@@ -4738,8 +4825,15 @@ def main():
         if auth_data:
             id_token = auth_data["id_token"]
             refresh_token = auth_data["refresh_token"]
-            save_config(doc_id, refresh_token, tag, brand_model)  # Update stored refresh token
-            print(f"[{get_current_time()}] {COLOR_GREEN}Autenticação restaurada com sucesso!{COLOR_RESET}\\n")
+            
+            # Refresh asset metadata from Firestore on boot if online
+            asset_info = find_asset_by_tag(tag, id_token)
+            metadata = asset_info.get("metadata") if asset_info else None
+            if asset_info:
+                brand_model = asset_info["marca_modelo"]
+                
+            save_config(doc_id, refresh_token, tag, brand_model, metadata)  # Update stored refresh token and metadata
+            print(f"[{get_current_time()}] {COLOR_GREEN}Autenticação restaurada e metadados atualizados com sucesso!{COLOR_RESET}\\n")
         else:
             print(f"[{get_current_time()}] {COLOR_RED}Falha ao restaurar autenticação automática.{COLOR_RESET}")
             print(f"⚠️ Apague o arquivo '{CONFIG_FILE}' para reiniciar a vinculação manual.")
@@ -4805,8 +4899,8 @@ def main():
         brand_model = asset_info["marca_modelo"]
         print(f" {COLOR_GREEN}ENCONTRADO: {brand_model}{COLOR_RESET}")
         
-        # Save credentials to config JSON securely
-        save_config(doc_id, refresh_token, tag, brand_model)
+        # Save credentials and metadata to config JSON securely
+        save_config(doc_id, refresh_token, tag, brand_model, asset_info.get("metadata"))
         print(f"[{get_current_time()}] Configurações de vinculação salvas localmente em '{CONFIG_FILE}'.\\n")
         
     print(f"[{get_current_time()}] Agente RMM ativado. Coletando e reportando telemetria a cada 15 segundos...")
@@ -4872,9 +4966,14 @@ def main():
         if res == "NOT_FOUND":
             print(f" {COLOR_RED}DOCUMENTO EXCLUÍDO{COLOR_RESET}")
             print(f"⚠️  O ativo correspondente foi excluído do inventário! Executando rotina de autorecuperação (Self-Healing)...")
-            recreate_res = recreate_asset_document(doc_id, tag, brand_model, telemetry, id_token)
+            
+            # Load metadata backup from local config
+            current_config = load_config()
+            backup_meta = current_config.get("metadata") if current_config else None
+            
+            recreate_res = recreate_asset_document(doc_id, tag, brand_model, telemetry, id_token, backup_meta)
             if recreate_res:
-                print(f"🟢 Ativo [{COLOR_MAGENTA}{brand_model}{COLOR_RESET}] com Tag [{COLOR_YELLOW}{tag}{COLOR_RESET}] recriado no Firestore com sucesso como 'Disponível'!")
+                print(f"🟢 Ativo [{COLOR_MAGENTA}{brand_model}{COLOR_RESET}] com Tag [{COLOR_YELLOW}{tag}{COLOR_RESET}] recriado no Firestore com sucesso como 'Disponível' com todos os dados originais restaurados!")
             else:
                 print(f"🔴 Falha crítica ao tentar recriar ativo excluído.")
         elif res is True:
@@ -4912,7 +5011,7 @@ if __name__ == "__main__":
             print(f"{COLOR_YELLOW}{extra_note}{COLOR_RESET}")
         
         # Save error traceback to local log file
-        log_file = "agent_error.log"
+        log_file = os.path.join(SCRIPT_DIR, "agent_error.log")
         try:
             with open(log_file, "a", encoding="utf-8") as f:
                 f.write(f"==================================================\\n")
@@ -4947,6 +5046,130 @@ function downloadPreConfiguredAgent(assetId, format = "py") {
     }
     
     const safeTag = tagValue.replace(/[^a-zA-Z0-9-_]/g, "_");
+    
+    if (format === "bat") {
+        showToast("Gerando script de inicialização (.bat em formato .txt)...", "info");
+        
+        const batContent = `@echo off
+:: Altera a codificação do prompt para aceitar acentos (UTF-8)
+chcp 65001 > nul
+
+echo ======================================================
+echo    CONFIGURADOR DE SCRIPT PYTHON EM SEGUNDO PLANO
+echo ======================================================
+echo.
+
+setlocal enabledelayedexpansion
+
+:: Pega a pasta atual onde este .bat está rodando
+set "PASTA_ATUAL=%~dp0"
+
+:: Verificar se Python está instalado
+python --version >nul 2>&1
+if %errorlevel% neq 0 (
+    py --version >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo [AVISO] Python não foi detectado no sistema!
+        echo [+] Iniciando o download automático do Python 3.11...
+        
+        :: Baixa o instalador do Python silenciosamente para a pasta temporária usando curl nativo
+        set "PYTHON_INSTALLER=%temp%\\python-installer.exe"
+        curl -L -o "!PYTHON_INSTALLER!" "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
+        
+        if not exist "!PYTHON_INSTALLER!" (
+            echo [ERRO] Falha ao baixar o instalador do Python.
+            echo Por favor, instale o Python manualmente em: https://www.python.org
+            pause
+            exit /b
+        )
+        
+        echo [+] Instalando o Python de forma silenciosa...
+        echo [+] ATENÇÃO: Uma janela de permissão do Windows (UAC) pode aparecer.
+        echo [+] Por favor, aguarde a conclusão da instalação...
+        
+        :: Executa o instalador de forma silenciosa, associando arquivos e adicionando ao PATH
+        start /wait "" "!PYTHON_INSTALLER!" /quiet InstallAllUsers=0 AssociateFiles=1 PrependPath=1 Include_test=0
+        
+        :: Limpa o instalador temporário
+        del /f /q "!PYTHON_INSTALLER!" >nul 2>&1
+        
+        :: Adiciona os diretórios padrão do Python local no PATH da sessão CMD atual
+        set "PATH=%PATH%;%USERPROFILE%\\AppData\\Local\\Programs\\Python\\Python311;%USERPROFILE%\\AppData\\Local\\Programs\\Python\\Python311\\Scripts"
+        
+        :: Verifica se a instalação foi bem-sucedida
+        python --version >nul 2>&1
+        if %errorlevel% neq 0 (
+            echo [AVISO] Python foi instalado, mas pode requerer que você reabra este arquivo .bat para aplicar as configurações de ambiente.
+            echo [+] Por favor, feche esta janela e execute o .bat novamente!
+            pause
+            exit /b
+        ) else (
+            echo [+] Python instalado e configurado no PATH com sucesso!
+            echo.
+        )
+    )
+)
+
+set "NOME_SCRIPT=agent_${safeTag}.py"
+set "SCRIPT_PYTHON=%PASTA_ATUAL%!NOME_SCRIPT!"
+
+:: Limpa o nome para criar as pastas sem pontos ou espaços problemáticos
+set "NOME_LIMPO=%NOME_SCRIPT:.py=%"
+
+:: Define os caminhos dos arquivos auxiliares na pasta oculta do usuário (baseado no nome do script)
+set "PASTA_DESTINO=%APPDATA%\\Persist_!NOME_LIMPO!"
+set "ARQUIVO_VBS=%PASTA_DESTINO%\\rodar_invisivel.vbs"
+set "ARQUIVO_BAT_LOOP=%PASTA_DESTINO%\\loop_persistente.bat"
+set "ATALHO_INICIALIZAR=%USERPROFILE%\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Iniciar_!NOME_LIMPO!.vbs"
+
+:: Cria a pasta de destino se ela não existir
+if not exist "%PASTA_DESTINO%" mkdir "%PASTA_DESTINO%"
+
+echo.
+echo [+] Configurando o script: !NOME_SCRIPT!
+echo [+] Criando o script de monitoramento (Anti-Fechamento)...
+(
+echo @echo off
+echo :LOOP
+echo pythonw "%SCRIPT_PYTHON%"
+echo goto LOOP
+) > "%ARQUIVO_BAT_LOOP%"
+
+echo [+] Criando o inicializador invisivel (VBScript)...
+(
+echo Set WshShell = CreateObject("WScript.Shell"^)
+echo WshShell.Run chr(34^) ^& "%ARQUIVO_BAT_LOOP%" ^& chr(34^), 0, False
+) > "%ARQUIVO_VBS%"
+
+echo [+] Configurando para iniciar junto com o Windows...
+copy /y "%ARQUIVO_VBS%" "%ATALHO_INICIALIZAR%" > nul
+
+echo [+] Executando o script agora em segundo plano...
+start "" "%ATALHO_INICIALIZAR%"
+
+echo.
+echo ======================================================
+echo  [SUCESSO] O script !NOME_SCRIPT! foi configurado!
+echo  Ele ja esta rodando oculto, nunca fechara e 
+echo  iniciara automaticamente com o Windows.
+echo ======================================================
+pause
+endlocal
+`;
+
+        const crlfContent = batContent.replace(/\r?\n/g, "\r\n");
+        const blob = new Blob([crlfContent], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `executar_agent_${safeTag}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`Script baixado como [executar_agent_${safeTag}.txt]! Renomeie a extensão para '.bat' para executá-lo.`, "success");
+        return;
+    }
     
     if (format === "exe") {
         showToast("Baixando executável do servidor...", "info");
@@ -5021,6 +5244,8 @@ function downloadPreConfiguredAgent(assetId, format = "py") {
             });
     }
 }
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PATCH: handleAuthSession — trigger listeners and update views
@@ -5113,9 +5338,303 @@ function cleanupListeners() {
     console.log('[RT] All snapshot listeners cleaned up.');
 }
 
+// Globals and functions for custom categories and sectors management
+let customCategories = ["Computador", "Monitor", "Impressora", "Câmera/DVR", "Switch/Roteador", "Periféricos", "Outros"];
+let customSectors = ["TI", "Financeiro", "RH", "Diretoria", "Operações", "Logística", "Comercial", "Recepção"];
+let categoryToSelectAfterSync = null;
+let sectorToSelectAfterSync = null;
+
+function listenConfiguracoesGerais() {
+    if (!db) return;
+    
+    // 1. Subscribe to Categorias
+    const unsubCategorias = db.collection("configuracao_geral").doc("categorias").onSnapshot(async doc => {
+        if (!doc.exists) {
+            try {
+                await db.collection("configuracao_geral").doc("categorias").set({ valores: customCategories });
+            } catch (err) {
+                console.error('[RT] Error initializing categorias:', err);
+            }
+        } else {
+            const data = doc.data();
+            if (data && Array.isArray(data.valores)) {
+                customCategories = data.valores;
+            }
+            populateCategoriesUI();
+        }
+    }, err => console.error('[RT] categorias error:', err));
+    unsubscribeListeners.push(unsubCategorias);
+
+    // 2. Subscribe to Setores
+    const unsubSetores = db.collection("configuracao_geral").doc("setores").onSnapshot(async doc => {
+        if (!doc.exists) {
+            try {
+                await db.collection("configuracao_geral").doc("setores").set({ valores: customSectors });
+            } catch (err) {
+                console.error('[RT] Error initializing setores:', err);
+            }
+        } else {
+            const data = doc.data();
+            if (data && Array.isArray(data.valores)) {
+                customSectors = data.valores;
+            }
+            populateSectorsUI();
+        }
+    }, err => console.error('[RT] setores error:', err));
+    unsubscribeListeners.push(unsubSetores);
+}
+
+function populateCategoriesUI() {
+    // Populate #hard-categoria select
+    const hardCat = document.getElementById("hard-categoria");
+    if (hardCat) {
+        const savedVal = hardCat.value;
+        hardCat.innerHTML = "";
+        customCategories.forEach(cat => {
+            const opt = document.createElement("option");
+            opt.value = cat;
+            opt.textContent = cat;
+            hardCat.appendChild(opt);
+        });
+
+        // Add "+ Adicionar Nova Categoria" option at the end of the list
+        const addOpt = document.createElement("option");
+        addOpt.value = "__ADD_NEW__";
+        addOpt.textContent = "+ Adicionar Nova Categoria";
+        addOpt.style.color = "#22d3ee"; // accent-cyan
+        addOpt.style.fontWeight = "bold";
+        hardCat.appendChild(addOpt);
+
+        if (categoryToSelectAfterSync && customCategories.includes(categoryToSelectAfterSync)) {
+            hardCat.value = categoryToSelectAfterSync;
+            hardCat.dataset.lastVal = categoryToSelectAfterSync;
+            categoryToSelectAfterSync = null;
+        } else if (customCategories.includes(savedVal)) {
+            hardCat.value = savedVal;
+            hardCat.dataset.lastVal = savedVal;
+        } else {
+            if (customCategories.length > 0) {
+                hardCat.value = customCategories[0];
+                hardCat.dataset.lastVal = customCategories[0];
+            }
+        }
+    }
+
+    // Populate #inv-filter-categoria select
+    const filterCat = document.getElementById("inv-filter-categoria");
+    if (filterCat) {
+        const savedVal = filterCat.value;
+        filterCat.innerHTML = '<option value="">Categoria: Todas</option>';
+        customCategories.forEach(cat => {
+            const opt = document.createElement("option");
+            opt.value = cat;
+            opt.textContent = cat;
+            filterCat.appendChild(opt);
+        });
+        if (savedVal && customCategories.includes(savedVal)) {
+            filterCat.value = savedVal;
+        }
+    }
+}
+
+function populateSectorsUI() {
+    // Populate #setor-datalist datalist
+    const list = document.getElementById("setor-datalist");
+    if (list) {
+        list.innerHTML = "";
+        customSectors.forEach(sec => {
+            const opt = document.createElement("option");
+            opt.value = sec;
+            list.appendChild(opt);
+        });
+
+        // Add "+ Adicionar Novo Setor" option at the end of the list
+        const addOpt = document.createElement("option");
+        addOpt.value = "+ Adicionar Novo Setor";
+        list.appendChild(addOpt);
+    }
+
+    // Restore or update the sector input if we just added a new sector
+    const hardSetor = document.getElementById("hard-setor");
+    if (hardSetor && sectorToSelectAfterSync && customSectors.includes(sectorToSelectAfterSync)) {
+        hardSetor.value = sectorToSelectAfterSync;
+        hardSetor.dataset.lastVal = sectorToSelectAfterSync;
+        sectorToSelectAfterSync = null;
+    }
+}
+
+function handleCategorySelection(select) {
+    const val = select.value;
+    if (val === "__ADD_NEW__") {
+        const prevVal = select.dataset.lastVal || "";
+        const nova = prompt("Digite o nome da nova Categoria:");
+        if (!nova || !nova.trim()) {
+            select.value = prevVal;
+            return;
+        }
+        const cat = nova.trim();
+        if (customCategories.includes(cat)) {
+            showToast("Esta categoria já existe!", "warning");
+            select.value = cat;
+            select.dataset.lastVal = cat;
+            return;
+        }
+        
+        categoryToSelectAfterSync = cat;
+        const updated = [...customCategories, cat];
+        db.collection("configuracao_geral").doc("categorias").set({ valores: updated })
+            .then(() => {
+                showToast(`Categoria '${cat}' adicionada com sucesso!`, "success");
+            })
+            .catch(e => {
+                showToast("Erro ao salvar categoria: " + e.message, "error");
+                select.value = prevVal;
+            });
+    } else {
+        select.dataset.lastVal = val;
+    }
+}
+
+function handleSectorInput(input) {
+    const val = input.value;
+    if (val === "+ Adicionar Novo Setor") {
+        const prevVal = input.dataset.lastVal || "";
+        const nova = prompt("Digite o nome do novo Setor/Departamento:");
+        if (!nova || !nova.trim()) {
+            input.value = prevVal;
+            return;
+        }
+        const sec = nova.trim();
+        if (customSectors.includes(sec)) {
+            showToast("Este setor já existe!", "warning");
+            input.value = sec;
+            input.dataset.lastVal = sec;
+            return;
+        }
+        
+        sectorToSelectAfterSync = sec;
+        const updated = [...customSectors, sec];
+        db.collection("configuracao_geral").doc("setores").set({ valores: updated })
+            .then(() => {
+                showToast(`Setor '${sec}' adicionado com sucesso!`, "success");
+            })
+            .catch(e => {
+                showToast("Erro ao salvar sector: " + e.message, "error");
+                input.value = prevVal;
+            });
+    } else {
+        input.dataset.lastVal = val;
+    }
+}
+
+async function adicionarCategoria() {
+    const nova = prompt("Digite o nome da nova Categoria:");
+    if (!nova || !nova.trim()) return;
+    const cat = nova.trim();
+    if (customCategories.includes(cat)) {
+        showToast("Esta categoria já existe!", "warning");
+        return;
+    }
+    const updated = [...customCategories, cat];
+    try {
+        await db.collection("configuracao_geral").doc("categorias").set({ valores: updated });
+        showToast(`Categoria '${cat}' adicionada com sucesso!`, "success");
+    } catch (e) {
+        showToast("Erro ao salvar categoria: " + e.message, "error");
+    }
+}
+
+async function removerCategoria() {
+    const sel = document.getElementById("hard-categoria")?.value;
+    if (!sel) {
+        showToast("Nenhuma categoria selecionada para remover.", "warning");
+        return;
+    }
+    if (!confirm(`Tem certeza que deseja remover a categoria '${sel}'?`)) return;
+    const updated = customCategories.filter(cat => cat !== sel);
+    try {
+        await db.collection("configuracao_geral").doc("categorias").set({ valores: updated });
+        showToast(`Categoria '${sel}' removida com sucesso!`, "success");
+    } catch (e) {
+        showToast("Erro ao remover categoria: " + e.message, "error");
+    }
+}
+
+async function adicionarSetor() {
+    const input = document.getElementById("hard-setor");
+    const val = input ? input.value.trim() : "";
+    if (!val) {
+        const nova = prompt("Digite o nome do novo Setor/Departamento:");
+        if (!nova || !nova.trim()) return;
+        const sec = nova.trim();
+        if (customSectors.includes(sec)) {
+            showToast("Este setor já existe!", "warning");
+            return;
+        }
+        const updated = [...customSectors, sec];
+        try {
+            await db.collection("configuracao_geral").doc("setores").set({ valores: updated });
+            showToast(`Setor '${sec}' adicionado com sucesso!`, "success");
+            if (input) input.value = sec;
+        } catch (e) {
+            showToast("Erro ao salvar setor: " + e.message, "error");
+        }
+    } else {
+        if (customSectors.includes(val)) {
+            showToast("Este setor já existe na lista de autocompletar!", "warning");
+            return;
+        }
+        const updated = [...customSectors, val];
+        try {
+            await db.collection("configuracao_geral").doc("setores").set({ valores: updated });
+            showToast(`Setor '${val}' adicionado à lista de autocompletar!`, "success");
+        } catch (e) {
+            showToast("Erro ao salvar setor: " + e.message, "error");
+        }
+    }
+}
+
+async function removerSetor() {
+    const input = document.getElementById("hard-setor");
+    const val = input ? input.value.trim() : "";
+    if (!val) {
+        const sel = prompt(`Digite o nome do setor que deseja remover da lista (Setores disponíveis: ${customSectors.join(", ")}):`);
+        if (!sel || !sel.trim()) return;
+        const sec = sel.trim();
+        if (!customSectors.includes(sec)) {
+            showToast("Este setor não foi encontrado na lista.", "warning");
+            return;
+        }
+        const updated = customSectors.filter(s => s !== sec);
+        try {
+            await db.collection("configuracao_geral").doc("setores").set({ valores: updated });
+            showToast(`Setor '${sec}' removido da lista!`, "success");
+        } catch (e) {
+            showToast("Erro ao remover setor: " + e.message, "error");
+        }
+    } else {
+        if (!customSectors.includes(val)) {
+            showToast(`O setor '${val}' não está na lista de autocompletar.`, "warning");
+            return;
+        }
+        if (!confirm(`Tem certeza que deseja remover o setor '${val}' da lista de autocompletar?`)) return;
+        const updated = customSectors.filter(s => s !== val);
+        try {
+            await db.collection("configuracao_geral").doc("setores").set({ valores: updated });
+            showToast(`Setor '${val}' removido com sucesso da lista!`, "success");
+            if (input) input.value = "";
+        } catch (e) {
+            showToast("Erro ao remover setor: " + e.message, "error");
+        }
+    }
+}
+
 function initRealtimeListeners() {
     if (!db) return;
     cleanupListeners();
+    
+    // — Configurações Gerais
+    listenConfiguracoesGerais();
 
     // — Projetos
     const unsubProjetos = db.collection("projetos").onSnapshot(snap => {
