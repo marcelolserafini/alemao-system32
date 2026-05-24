@@ -27,6 +27,8 @@ document.addEventListener("DOMContentLoaded", () => {
     initTheme();
     initFirebase();
     initModalClickOutside();
+    populateCategoriesUI();
+    populateSectorsUI();
 });
 
 // Setup Firebase Connection
@@ -4242,6 +4244,8 @@ function closeAssetHistoryModal() {
     if (modal) modal.classList.add("hidden");
 }
 
+let currentRmmAssetId = null;
+
 function openRmmHudModal(assetId) {
     const asset = assets.find(a => a.id === assetId);
     if (!asset || !asset.telemetria) {
@@ -4249,6 +4253,7 @@ function openRmmHudModal(assetId) {
         return;
     }
 
+    currentRmmAssetId = assetId;
     const t = asset.telemetria;
 
     // Preencher metadados de sistema
@@ -4279,7 +4284,8 @@ function openRmmHudModal(assetId) {
     const ramTotal = parseFloat(t.ram_total_gb || 0).toFixed(1);
     const ramUsed = parseFloat(t.ram_used_gb || 0).toFixed(1);
     const ramPerc = parseFloat(t.ram_percent || 0).toFixed(0);
-    document.getElementById("rmm-ram-text").textContent = `${ramUsed} GB / ${ramTotal} GB (${ramPerc}%)`;
+    document.getElementById("rmm-ram-percent-text").textContent = `${ramPerc}%`;
+    document.getElementById("rmm-ram-text").textContent = `${ramUsed} GB / ${ramTotal} GB`;
     const ramBar = document.getElementById("rmm-ram-bar");
     if (ramBar) {
         ramBar.style.width = `${ramPerc}%`;
@@ -4294,7 +4300,8 @@ function openRmmHudModal(assetId) {
     const diskTotal = parseFloat(t.disk_total_gb || 0).toFixed(0);
     const diskFree = parseFloat(t.disk_free_gb || 0).toFixed(0);
     const diskPerc = parseFloat(t.disk_percent || 0).toFixed(0);
-    document.getElementById("rmm-disk-text").textContent = `${diskFree} GB Livre de ${diskTotal} GB (${diskPerc}% em uso)`;
+    document.getElementById("rmm-disk-percent-text").textContent = `${diskPerc}%`;
+    document.getElementById("rmm-disk-text").textContent = `${diskFree} GB Livre de ${diskTotal} GB`;
     const diskBar = document.getElementById("rmm-disk-bar");
     if (diskBar) {
         diskBar.style.width = `${diskPerc}%`;
@@ -4302,6 +4309,68 @@ function openRmmHudModal(assetId) {
             diskBar.className = "bg-gradient-to-r from-rose-500 to-red-600 h-full rounded-full transition-all duration-500";
         } else {
             diskBar.className = "bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full transition-all duration-500";
+        }
+    }
+
+    // Render Processes List
+    const procList = document.getElementById("rmm-processes-list");
+    if (procList) {
+        procList.innerHTML = "";
+        const processes = asset.processos || [];
+        if (processes.length === 0) {
+            procList.innerHTML = `
+                <tr>
+                    <td colspan="6" class="px-3 py-4 text-center text-slate-500">Nenhum processo reportado pelo agente.</td>
+                </tr>
+            `;
+        } else {
+            processes.forEach(p => {
+                const tr = document.createElement("tr");
+                tr.className = "hover:bg-white/5 transition-colors";
+                
+                const pCpu = parseFloat(p.cpu_percent || 0).toFixed(1);
+                const pRam = parseFloat(p.ram_percent || 0).toFixed(1);
+                
+                let statusBadge = `<span class="text-slate-400">Dormindo</span>`;
+                if (p.status === 'running') {
+                    statusBadge = `<span class="text-emerald-400 font-bold">Ativo</span>`;
+                } else if (p.status === 'zombie') {
+                    statusBadge = `<span class="text-red-400 font-bold animate-pulse">Zumbi</span>`;
+                } else if (p.status === 'stopped') {
+                    statusBadge = `<span class="text-amber-400">Pausado</span>`;
+                }
+                
+                let actionBtn = "";
+                if (p.status === 'stopped') {
+                    actionBtn = `
+                        <button onclick="sendRmmCommand('${asset.id}', 'resume', ${p.pid})" class="text-emerald-400 hover:text-emerald-300 font-bold mr-2.5 transition" title="Resumir/Continuar">
+                            <i data-lucide="play" class="h-3.5 w-3.5 inline"></i>
+                        </button>
+                    `;
+                } else {
+                    actionBtn = `
+                        <button onclick="sendRmmCommand('${asset.id}', 'pause', ${p.pid})" class="text-amber-400 hover:text-amber-300 font-bold mr-2.5 transition" title="Pausar">
+                            <i data-lucide="pause" class="h-3.5 w-3.5 inline"></i>
+                        </button>
+                    `;
+                }
+                
+                actionBtn += `
+                    <button onclick="confirmKillProcess('${asset.id}', '${p.name}', ${p.pid})" class="text-rose-500 hover:text-rose-400 font-bold transition" title="Encerrar (Matar)">
+                        <i data-lucide="trash-2" class="h-3.5 w-3.5 inline"></i>
+                    </button>
+                `;
+                
+                tr.innerHTML = `
+                    <td class="px-3 py-1.5 text-slate-400 font-semibold">${p.pid}</td>
+                    <td class="px-3 py-1.5 text-white font-bold max-w-[140px] truncate" title="${p.name}">${p.name}</td>
+                    <td class="px-3 py-1.5 text-[10px]">${statusBadge}</td>
+                    <td class="px-3 py-1.5 text-right font-semibold text-slate-300">${pCpu}%</td>
+                    <td class="px-3 py-1.5 text-right font-semibold text-slate-300">${pRam}%</td>
+                    <td class="px-3 py-1.5 text-center whitespace-nowrap">${actionBtn}</td>
+                `;
+                procList.appendChild(tr);
+            });
         }
     }
 
@@ -4321,6 +4390,64 @@ function openRmmHudModal(assetId) {
 function closeRmmHudModal() {
     const modal = document.getElementById("modal-rmm-hud");
     if (modal) modal.classList.add("hidden");
+    currentRmmAssetId = null;
+}
+
+async function sendRmmCommand(assetId, action, pid, executable = "") {
+    if (!db) {
+        showToast("Conecte ao Firebase para enviar comandos.", "error");
+        return;
+    }
+    
+    const idComando = "CMD-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5).toUpperCase();
+    showToast(`Enviando comando '${action.toUpperCase()}'...`, "info");
+    
+    try {
+        await db.collection("inventario_ativos").doc(assetId).update({
+            comando_pendente: {
+                acao: action,
+                pid: parseInt(pid) || 0,
+                executavel: executable,
+                id_comando: idComando
+            }
+        });
+        
+        const unsub = db.collection("inventario_ativos").doc(assetId).onSnapshot(doc => {
+            if (!doc.exists) return;
+            const data = doc.data();
+            const res = data.comando_resultado;
+            
+            if (res && res.id_comando === idComando) {
+                if (res.sucesso) {
+                    showToast(`Comando '${action.toUpperCase()}' executado com sucesso!`, "success");
+                } else {
+                    showToast(`Falha no comando: ${res.erro}`, "error");
+                }
+                unsub();
+            }
+        });
+        
+        setTimeout(() => {
+            unsub();
+        }, 15000);
+        
+    } catch (e) {
+        showToast("Erro ao enviar comando: " + e.message, "error");
+    }
+}
+
+function confirmKillProcess(assetId, name, pid) {
+    if (confirm(`Tem certeza de que deseja Encerrar (Matar) o processo '${name}' (PID: ${pid})?`)) {
+        sendRmmCommand(assetId, 'kill', pid);
+    }
+}
+
+function startNewProcessPrompt() {
+    if (!currentRmmAssetId) return;
+    const exec = prompt("Digite o nome ou caminho do executável a ser iniciado (Ex: notepad.exe):");
+    if (exec && exec.trim()) {
+        sendRmmCommand(currentRmmAssetId, 'start', 0, exec.trim());
+    }
 }
 
 const AGENT_BASELINE_CODE = `import sys
@@ -4655,15 +4782,56 @@ def get_system_telemetry():
         "disk_percent": disk_percent
     }
 
-def update_asset_telemetry(doc_id, telemetry, id_token):
+def get_running_processes():
+    """Gets top 15 running processes sorted by RAM and CPU usage."""
+    processes = []
+    for proc in psutil.process_iter(['pid', 'name', 'status', 'cpu_percent', 'memory_percent', 'username']):
+        try:
+            info = proc.info
+            processes.append({
+                "pid": info['pid'],
+                "name": info['name'] or "Desconhecido",
+                "status": info['status'] or "unknown",
+                "cpu_percent": info['cpu_percent'] or 0.0,
+                "ram_percent": info['memory_percent'] or 0.0,
+                "username": info['username'] or "N/A"
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+            
+    processes.sort(key=lambda p: (p['ram_percent'], p['cpu_percent']), reverse=True)
+    return processes[:15]
+
+def update_asset_telemetry(doc_id, telemetry, processes, id_token):
     """Sends telemetry data payload to Firestore document fields using ID Token."""
-    url = f"{BASE_URL}/{doc_id}?updateMask.fieldPaths=online&updateMask.fieldPaths=last_seen&updateMask.fieldPaths=telemetria&currentDocument.exists=true"
+    url = f"{BASE_URL}/{doc_id}?updateMask.fieldPaths=online&updateMask.fieldPaths=last_seen&updateMask.fieldPaths=telemetria&updateMask.fieldPaths=processos&currentDocument.exists=true"
     iso_time = get_iso_timestamp()
     
+    # Construct processes payload (top 15)
+    proc_values = []
+    for p in processes:
+        proc_values.append({
+            "mapValue": {
+                "fields": {
+                    "pid": {"integerValue": str(p["pid"])},
+                    "name": {"stringValue": p["name"]},
+                    "status": {"stringValue": p["status"]},
+                    "cpu_percent": {"doubleValue": float(p["cpu_percent"])},
+                    "ram_percent": {"doubleValue": float(p["ram_percent"])},
+                    "username": {"stringValue": p["username"]}
+                }
+            }
+        })
+        
     payload = {
         "fields": {
             "online": {"booleanValue": True},
             "last_seen": {"stringValue": iso_time},
+            "processos": {
+                "arrayValue": {
+                    "values": proc_values
+                }
+            },
             "telemetria": {
                 "mapValue": {
                     "fields": {
@@ -4710,6 +4878,220 @@ def update_asset_telemetry(doc_id, telemetry, id_token):
     except Exception as e:
         print(f"[{get_current_time()}] {COLOR_RED}Erro de rede ao enviar telemetria: {e}{COLOR_RESET}")
         return False
+
+def execute_process_command(comando, id_token):
+    """Executes a pending command on processes using psutil."""
+    acao = comando.get("acao")
+    pid = comando.get("pid")
+    executavel = comando.get("executavel")
+    id_comando = comando.get("id_comando")
+    
+    sucesso = False
+    erro_msg = ""
+    
+    try:
+        if acao == "kill":
+            # Identificar o processo raiz da mesma aplicação (ex: chrome.exe principal)
+            # subindo na árvore genealógica de processos enquanto o nome for idêntico.
+            root_pid = pid
+            try:
+                proc = psutil.Process(pid)
+                current = proc
+                for _ in range(10): # Limite de subida para segurança contra loops infinitos
+                    parent = current.parent()
+                    if parent and parent.name() == current.name():
+                        current = parent
+                    else:
+                        break
+                root_pid = current.pid
+            except Exception:
+                pass
+
+            # Tentar usar o taskkill nativo do Windows para fechar a árvore de processos a partir do processo raiz encontrado
+            if platform.system().startswith("Win"):
+                try:
+                    import subprocess
+                    ret = subprocess.run(["taskkill", "/F", "/T", "/PID", str(root_pid)], capture_output=True, text=True)
+                    if ret.returncode == 0:
+                        sucesso = True
+                except Exception:
+                    pass
+            
+            # Fallback robusto usando psutil se taskkill falhar ou não for Windows (aplicado ao processo raiz)
+            if not sucesso:
+                try:
+                    parent = psutil.Process(root_pid)
+                    try:
+                        children = parent.children(recursive=True)
+                    except Exception:
+                        children = []
+                    for child in children:
+                        try:
+                            child.kill()
+                        except Exception:
+                            pass
+                    parent.kill()
+                    psutil.wait_procs(children + [parent], timeout=2)
+                    sucesso = True
+                except psutil.NoSuchProcess:
+                    sucesso = True
+        elif acao == "pause":
+            p = psutil.Process(pid)
+            p.suspend()
+            sucesso = True
+        elif acao == "resume":
+            p = psutil.Process(pid)
+            p.resume()
+            sucesso = True
+        elif acao == "start":
+            if executavel:
+                import subprocess
+                subprocess.Popen(executavel, shell=True, start_new_session=True)
+                sucesso = True
+            else:
+                erro_msg = "Executável não especificado"
+        else:
+            erro_msg = f"Ação desconhecida: {acao}"
+    except psutil.NoSuchProcess:
+        erro_msg = f"Processo com PID {pid} não encontrado"
+    except psutil.AccessDenied:
+        erro_msg = f"Acesso negado para o PID {pid}"
+    except Exception as e:
+        erro_msg = str(e)
+        
+    return sucesso, erro_msg
+
+def clear_pending_command(doc_id, id_comando, id_token):
+    """Clears the pending command field in Firestore."""
+    url = f"{BASE_URL}/{doc_id}?updateMask.fieldPaths=comando_pendente"
+    payload = {
+        "fields": {
+            "comando_pendente": {"nullValue": None}
+        }
+    }
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0",
+                "Authorization": f"Bearer {id_token}"
+            },
+            method="PATCH"
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return response.status == 200
+    except Exception:
+        return False
+
+def report_command_result(doc_id, id_comando, sucesso, erro_msg, id_token):
+    """Clears the pending command and writes the result to Firestore."""
+    url = f"{BASE_URL}/{doc_id}?updateMask.fieldPaths=comando_pendente&updateMask.fieldPaths=comando_resultado"
+    iso_time = get_iso_timestamp()
+    
+    payload = {
+        "fields": {
+            "comando_pendente": {"nullValue": None},
+            "comando_resultado": {
+                "mapValue": {
+                    "fields": {
+                        "id_comando": {"stringValue": id_comando},
+                        "sucesso": {"booleanValue": sucesso},
+                        "erro": {"stringValue": erro_msg or ""},
+                        "timestamp": {"stringValue": iso_time}
+                    }
+                }
+            }
+        }
+    }
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0",
+                "Authorization": f"Bearer {id_token}"
+            },
+            method="PATCH"
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return response.status == 200
+    except Exception as e:
+        print(f"Erro ao reportar resultado: {e}")
+        return False
+
+def check_and_execute_remote_commands(doc_id, id_token):
+    """Checks for pending commands in Firestore, executes them, and reports results."""
+    url = f"{BASE_URL}/{doc_id}"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0",
+                "Authorization": f"Bearer {id_token}"
+            },
+            method="GET"
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            fields = res_data.get("fields", {})
+            
+            comando_field = fields.get("comando_pendente")
+            if not comando_field or "mapValue" not in comando_field:
+                return
+                
+            comando_map = comando_field["mapValue"].get("fields", {})
+            if not comando_map:
+                return
+                
+            acao = comando_map.get("acao", {}).get("stringValue", "")
+            id_comando = comando_map.get("id_comando", {}).get("stringValue", "")
+            
+            if not acao or not id_comando:
+                return
+                
+            pid_str = comando_map.get("pid", {}).get("integerValue", "0")
+            pid = int(pid_str)
+            executavel = comando_map.get("executavel", {}).get("stringValue", "")
+            
+            comando = {
+                "acao": acao,
+                "pid": pid,
+                "executavel": executavel,
+                "id_comando": id_comando
+            }
+            
+            # Check if this command was already processed
+            last_processed = None
+            config = load_config()
+            if config:
+                last_processed = config.get("last_processed_command")
+                
+            if last_processed == id_comando:
+                clear_pending_command(doc_id, id_comando, id_token)
+                return
+                
+            print(f"\\n[{get_current_time()}] ⚙️ Comando Remoto recebido: {COLOR_YELLOW}{acao.upper()}{COLOR_RESET} (PID: {pid}, Executável: {executavel})")
+            
+            sucesso, erro = execute_process_command(comando, id_token)
+            
+            if sucesso:
+                print(f"[{get_current_time()}] {COLOR_GREEN}✓ Comando executado com sucesso!{COLOR_RESET}")
+            else:
+                print(f"[{get_current_time()}] {COLOR_RED}✗ Falha ao executar comando: {erro}{COLOR_RESET}")
+                
+            # Save last processed command to local config
+            if config:
+                config["last_processed_command"] = id_comando
+                save_config(config["doc_id"], config["refresh_token"], config["tag"], config["marca_modelo"], config.get("metadata"))
+                
+            report_command_result(doc_id, id_comando, sucesso, erro, id_token)
+            
+    except Exception as e:
+        print(f"[{get_current_time()}] Erro ao verificar comandos: {e}")
 
 def recreate_asset_document(doc_id, tag, brand_model, telemetry, id_token, backup_metadata=None):
     """Recreates the asset document in Firestore with the same ID if it was deleted (Self-Healing)."""
@@ -4943,8 +5325,9 @@ def main():
                 print(f" {COLOR_YELLOW}SEM ALTERAÇÕES{COLOR_RESET}")
             last_name_check_time = time.time()
                 
-        # Gather local metrics
+        # Gather local metrics and processes
         telemetry = get_system_telemetry()
+        processes = get_running_processes()
         
         # Print metrics beautifully on the console
         print(f"\\n[{get_current_time()}] 📊 Métricas Locais para {COLOR_MAGENTA}{telemetry['hostname']}{COLOR_RESET}:")
@@ -4952,10 +5335,11 @@ def main():
         print(f"  💾 RAM:  {COLOR_CYAN}{telemetry['ram_used_gb']:.2f} GB{COLOR_RESET} / {telemetry['ram_total_gb']:.1f} GB ({telemetry['ram_percent']}%)")
         print(f"  💽 Disk: {COLOR_CYAN}{telemetry['disk_free_gb']:.1f} GB Livre{COLOR_RESET} de {telemetry['disk_total_gb']:.1f} GB ({telemetry['disk_percent']}% Usado)")
         print(f"  🌐 Rede: IP {COLOR_YELLOW}{telemetry['ip_local']}{COLOR_RESET} | Usuário: {COLOR_GREEN}{telemetry['logged_user']}{COLOR_RESET}")
+        print(f"  ⚙️  Processos: Coletados {COLOR_GREEN}{len(processes)}{COLOR_RESET} principais processos.")
         
         # Send Patch Request to Firestore
-        print(f"  🚀 Enviando telemetria para o painel RMM...", end="", flush=True)
-        res = update_asset_telemetry(doc_id, telemetry, id_token)
+        print(f"  🚀 Enviando telemetria e processos para o painel RMM...", end="", flush=True)
+        res = update_asset_telemetry(doc_id, telemetry, processes, id_token)
         
         if res == "EXPIRED":
             # Token expired unexpectedly, try to refresh immediately and retry
@@ -4967,7 +5351,7 @@ def main():
                 save_config(doc_id, refresh_token, tag, brand_model)
                 last_refresh_time = time.time()
                 # Retry update
-                res = update_asset_telemetry(doc_id, telemetry, id_token)
+                res = update_asset_telemetry(doc_id, telemetry, processes, id_token)
                 
         if res == "NOT_FOUND":
             print(f" {COLOR_RED}DOCUMENTO EXCLUÍDO{COLOR_RESET}")
@@ -4986,6 +5370,9 @@ def main():
             print(f" {COLOR_GREEN}SUCESSO{COLOR_RESET}")
         else:
             print(f" {COLOR_RED}FALHOU{COLOR_RESET}")
+            
+        # Check and execute remote commands
+        check_and_execute_remote_commands(doc_id, id_token)
             
         time.sleep(15)
 
@@ -5391,28 +5778,39 @@ function listenConfiguracoesGerais() {
 }
 
 function populateCategoriesUI() {
-    // Populate #categoria-datalist datalist
-    const list = document.getElementById("categoria-datalist");
-    if (list) {
-        list.innerHTML = "";
+    // Populate #hard-categoria select
+    const hardCat = document.getElementById("hard-categoria");
+    if (hardCat) {
+        const savedVal = hardCat.value;
+        hardCat.innerHTML = "";
         customCategories.forEach(cat => {
             const opt = document.createElement("option");
             opt.value = cat;
-            list.appendChild(opt);
+            opt.textContent = cat;
+            hardCat.appendChild(opt);
         });
 
         // Add "+ Adicionar Nova Categoria" option at the end of the list
         const addOpt = document.createElement("option");
-        addOpt.value = "+ Adicionar Nova Categoria";
-        list.appendChild(addOpt);
-    }
+        addOpt.value = "__ADD_NEW__";
+        addOpt.textContent = "+ Adicionar Nova Categoria";
+        addOpt.style.color = "#22d3ee"; // accent-cyan
+        addOpt.style.fontWeight = "bold";
+        hardCat.appendChild(addOpt);
 
-    // Restore or update the category input if we just added a new category
-    const hardCat = document.getElementById("hard-categoria");
-    if (hardCat && categoryToSelectAfterSync && customCategories.includes(categoryToSelectAfterSync)) {
-        hardCat.value = categoryToSelectAfterSync;
-        hardCat.dataset.lastVal = categoryToSelectAfterSync;
-        categoryToSelectAfterSync = null;
+        if (categoryToSelectAfterSync && customCategories.includes(categoryToSelectAfterSync)) {
+            hardCat.value = categoryToSelectAfterSync;
+            hardCat.dataset.lastVal = categoryToSelectAfterSync;
+            categoryToSelectAfterSync = null;
+        } else if (customCategories.includes(savedVal)) {
+            hardCat.value = savedVal;
+            hardCat.dataset.lastVal = savedVal;
+        } else {
+            if (customCategories.length > 0) {
+                hardCat.value = customCategories[0];
+                hardCat.dataset.lastVal = customCategories[0];
+            }
+        }
     }
 
     // Populate #inv-filter-categoria select
@@ -5474,20 +5872,20 @@ function populateSectorsUI() {
     }
 }
 
-function handleCategoryInput(input) {
-    const val = input.value;
-    if (val === "+ Adicionar Nova Categoria") {
-        const prevVal = input.dataset.lastVal || "";
+function handleCategorySelection(select) {
+    const val = select.value;
+    if (val === "__ADD_NEW__") {
+        const prevVal = select.dataset.lastVal || "";
         const nova = prompt("Digite o nome da nova Categoria:");
         if (!nova || !nova.trim()) {
-            input.value = prevVal;
+            select.value = prevVal;
             return;
         }
         const cat = nova.trim();
         if (customCategories.includes(cat)) {
             showToast("Esta categoria já existe!", "warning");
-            input.value = cat;
-            input.dataset.lastVal = cat;
+            select.value = cat;
+            select.dataset.lastVal = cat;
             return;
         }
         
@@ -5499,10 +5897,10 @@ function handleCategoryInput(input) {
             })
             .catch(e => {
                 showToast("Erro ao salvar categoria: " + e.message, "error");
-                input.value = prevVal;
+                select.value = prevVal;
             });
     } else {
-        input.dataset.lastVal = val;
+        select.dataset.lastVal = val;
     }
 }
 

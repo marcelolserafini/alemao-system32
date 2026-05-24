@@ -1091,7 +1091,14 @@
                         </span>
                         <select id="inv-filter-setor" onchange="applyInventoryFilters()" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-cyan transition duration-250 appearance-none">
                             <option value="">Setor: Todos</option>
-                            <!-- Populado dinamicamente -->
+                            <option value="TI">TI</option>
+                            <option value="Financeiro">Financeiro</option>
+                            <option value="RH">RH</option>
+                            <option value="Diretoria">Diretoria</option>
+                            <option value="Operações">Operações</option>
+                            <option value="Logística">Logística</option>
+                            <option value="Comercial">Comercial</option>
+                            <option value="Recepção">Recepção</option>
                         </select>
                     </div>
                 </div>
@@ -1848,17 +1855,18 @@
                      </div>
                      <div>
                           <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">Categoria *</label>
-                          <input type="text" id="hard-categoria" required list="categoria-datalist" oninput="handleCategoryInput(this)" placeholder="Ex: Computador, Monitor..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-cyan">
-                          <datalist id="categoria-datalist">
-                              <option value="Computador"></option>
-                              <option value="Monitor"></option>
-                              <option value="Impressora"></option>
-                              <option value="Câmera/DVR"></option>
-                              <option value="Switch/Roteador"></option>
-                              <option value="Periféricos"></option>
-                              <option value="Outros"></option>
-                              <option value="+ Adicionar Nova Categoria"></option>
-                          </datalist>
+                          <div class="relative w-full">
+                              <select id="hard-categoria" required onchange="handleCategorySelection(this)" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-accent-cyan appearance-none">
+                                  <option value="Computador">Computador</option>
+                                  <option value="Monitor">Monitor</option>
+                                  <option value="Impressora">Impressora</option>
+                                  <option value="Câmera/DVR">Câmera/DVR</option>
+                                  <option value="Switch/Roteador">Switch/Roteador</option>
+                                  <option value="Periféricos">Periféricos</option>
+                                  <option value="Outros">Outros</option>
+                                  <option value="__ADD_NEW__" style="color: #22d3ee; font-weight: bold;">+ Adicionar Nova Categoria</option>
+                              </select>
+                          </div>
                      </div>
                  </div>
 
@@ -2213,7 +2221,7 @@
 
     <!-- MODAL: CONSOLE RMM TELEMETRIA (NOVO) -->
     <div id="modal-rmm-hud" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md hidden">
-        <div class="w-full max-w-xl glass border-white/10 rounded-2xl p-6 shadow-2xl relative flex flex-col gap-5">
+        <div class="w-full max-w-2xl glass border-white/10 rounded-2xl p-6 shadow-2xl relative flex flex-col gap-5">
             <!-- Header do Modal -->
             <div class="flex items-center justify-between pb-4 border-b border-white/5">
                 <div class="flex items-center space-x-3">
@@ -2245,45 +2253,76 @@
                 </div>
 
                 <!-- Metrics HUD -->
-                <div class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <!-- CPU Usage -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 bg-slate-900/20 border border-white/5 p-3 rounded-xl">
                         <div class="flex justify-between text-xs font-semibold">
-                            <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="cpu" class="h-4 w-4 text-slate-400"></i> Uso de CPU</span>
+                            <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="cpu" class="h-4 w-4 text-slate-400"></i> CPU</span>
                             <span id="rmm-cpu-percent" class="font-mono text-white">0%</span>
                         </div>
-                        <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-white/5">
+                        <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
                             <div id="rmm-cpu-bar" class="bg-gradient-to-r from-accent-cyan to-accent-teal h-full rounded-full transition-all duration-500" style="width: 0%"></div>
                         </div>
                     </div>
 
                     <!-- RAM Usage -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 bg-slate-900/20 border border-white/5 p-3 rounded-xl">
                         <div class="flex justify-between text-xs font-semibold">
-                            <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="database" class="h-4 w-4 text-slate-400"></i> Memória RAM</span>
-                            <span id="rmm-ram-text" class="font-mono text-white">0.0 GB / 0.0 GB (0%)</span>
+                            <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="database" class="h-4 w-4 text-slate-400"></i> RAM</span>
+                            <span id="rmm-ram-percent-text" class="font-mono text-white">0%</span>
                         </div>
-                        <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-white/5">
+                        <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
                             <div id="rmm-ram-bar" class="bg-gradient-to-r from-indigo-500 to-accent-cyan h-full rounded-full transition-all duration-500" style="width: 0%"></div>
                         </div>
+                        <div id="rmm-ram-text" class="text-[10px] text-slate-400 font-mono mt-1 text-center">0.0 GB / 0.0 GB</div>
                     </div>
 
                     <!-- Disk Space -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 bg-slate-900/20 border border-white/5 p-3 rounded-xl">
                         <div class="flex justify-between text-xs font-semibold">
-                            <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="hard-drive" class="h-4 w-4 text-slate-400"></i> Armazenamento (Disco Principal)</span>
-                            <span id="rmm-disk-text" class="font-mono text-white">0.0 GB Livre de 0.0 GB (0% Usado)</span>
+                            <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="hard-drive" class="h-4 w-4 text-slate-400"></i> Disco</span>
+                            <span id="rmm-disk-percent-text" class="font-mono text-white">0%</span>
                         </div>
-                        <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-white/5">
+                        <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
                             <div id="rmm-disk-bar" class="bg-gradient-to-r from-amber-500 to-rose-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
                         </div>
+                        <div id="rmm-disk-text" class="text-[10px] text-slate-400 font-mono mt-1 text-center">0 GB Livre de 0 GB</div>
+                    </div>
+                </div>
+
+                <!-- Seção de Processos -->
+                <div class="space-y-3 pt-2">
+                    <div class="flex items-center justify-between text-xs font-semibold text-slate-300">
+                        <span class="flex items-center gap-1.5"><i data-lucide="terminal" class="h-4 w-4 text-slate-400"></i> Processos em Execução (Top CPU/RAM)</span>
+                        <button onclick="startNewProcessPrompt()" class="inline-flex items-center gap-1 text-[10px] text-accent-cyan hover:text-cyan-300 font-bold bg-accent-cyan/10 hover:bg-accent-cyan/20 border border-accent-cyan/20 px-2 py-1 rounded-lg transition">
+                            <i data-lucide="plus" class="h-3 w-3"></i> Iniciar Processo
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto rounded-xl border border-white/5 bg-slate-950/40 max-h-56 overflow-y-auto">
+                        <table class="w-full text-left border-collapse text-xs font-mono">
+                            <thead>
+                                <tr class="border-b border-white/5 bg-slate-900/50 text-slate-500 font-bold uppercase tracking-wider text-[9px]">
+                                    <th class="px-3 py-2">PID</th>
+                                    <th class="px-3 py-2">Nome</th>
+                                    <th class="px-3 py-2">Status</th>
+                                    <th class="px-3 py-2 text-right">CPU</th>
+                                    <th class="px-3 py-2 text-right">RAM</th>
+                                    <th class="px-3 py-2 text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rmm-processes-list" class="divide-y divide-white/5 text-slate-300">
+                                <tr>
+                                    <td colspan="6" class="px-3 py-4 text-center text-slate-500">Aguardando telemetria do agente...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
             <!-- Footer Details -->
             <div class="flex items-center justify-between text-[10px] text-slate-500 pt-3 border-t border-white/5 font-mono">
-                <span class="flex items-center gap-1"><i data-lucide="refresh-cw" class="h-3 w-3 animate-spin"></i> Atualizado em tempo real</span>
+                <span class="flex items-center gap-1"><i data-lucide="refresh-cw" class="h-3 w-3 animate-spin text-accent-cyan"></i> Monitorado em Tempo Real</span>
                 <span>Último reporte: <strong id="rmm-last-seen" class="text-slate-400">-</strong></span>
             </div>
         </div>
